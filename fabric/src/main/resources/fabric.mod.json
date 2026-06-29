@@ -3,13 +3,12 @@
   "id": "fishingfrenzy",
   "version": "${version}",
   "name": "Fishing Frenzy",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "description": "A fishing expansion mod adding a wide variety of new fish, baits, and fishing mechanics.",
   "authors": [
-    "Me!"
+    "Vg34100"
   ],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "homepage": "https://github.com/Vg34100"
   },
   "license": "CC0-1.0",
   "icon": "assets/fishingfrenzy/icon.png",
@@ -21,6 +20,9 @@
     "client": [
       "net.vg.fishingfrenzy.fabric.client.FishingFrenzyFabricClient"
     ],
+    "modmenu": [
+      "net.vg.fishingfrenzy.fabric.client.FishingFrenzyModMenu"
+    ],
     "fabric-datagen": [
       "net.vg.fishingfrenzy.fabric.data.ModDataGenerator"
     ]
@@ -30,13 +32,13 @@
     "fishingfrenzy-fabric.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.16.2",
-    "minecraft": "~1.21",
-    "java": ">=21",
-    "architectury": ">=13.0.2",
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.1.2",
+    "java": ">=25",
+    "architectury": ">=20.0.0",
     "fabric-api": "*"
   },
   "suggests": {
-    "another-mod": "*"
+    "modmenu": "*"
   }
 }
