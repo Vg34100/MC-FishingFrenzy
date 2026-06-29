@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "fishingfrenzy:worm_bait",
+    "minecraft:string",
+    "minecraft:sweet_berries",
+    "#minecraft:leaves"
+  ],
+  "result": {
+    "count": 2,
+    "id": "fishingfrenzy:wild_bait"
+  }
+}

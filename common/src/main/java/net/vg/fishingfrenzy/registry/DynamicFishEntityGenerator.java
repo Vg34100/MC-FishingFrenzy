@@ -3,12 +3,14 @@ package net.vg.fishingfrenzy.registry;
 import dev.architectury.registry.level.entity.EntityAttributeRegistry;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.animal.AbstractSchoolingFish;
+import net.minecraft.world.entity.animal.fish.AbstractSchoolingFish;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.vg.fishingfrenzy.Constants;
@@ -35,8 +37,14 @@ public class DynamicFishEntityGenerator {
                                         },
                                 MobCategory.WATER_AMBIENT
                         )
-                        .sized(1f, 1f)
-                        .build(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, entityName).toString())
+                        .sized(fishRegistry.getEntityWidth(), fishRegistry.getEntityHeight())
+                        .build(
+                                ResourceKey.create(
+                                        Registries.ENTITY_TYPE,
+                                        Identifier.fromNamespaceAndPath(Constants.MOD_ID, entityName)
+                                )
+                        )
+//                        .build(Identifier.fromNamespaceAndPath(Constants.MOD_ID, entityName))
         );
 
         // Register the entity attributes
@@ -57,12 +65,11 @@ public class DynamicFishEntityGenerator {
     }
 
     private static AttributeSupplier.Builder createFishAttributes(FishRegistry fishRegistry) {
-        AttributeSupplier.Builder attributes = AbstractSchoolingFish.createAttributes()
-                .add(Attributes.MAX_HEALTH, 3)
-                .add(Attributes.MOVEMENT_SPEED, 1)
-                .add(Attributes.ATTACK_DAMAGE, 1);
-
-        return attributes;
+        return AbstractSchoolingFish.createAttributes()
+                .add(Attributes.MAX_HEALTH, fishRegistry.getMaxHealth())
+                .add(Attributes.MOVEMENT_SPEED, fishRegistry.getMoveSpeed())
+                .add(Attributes.ATTACK_DAMAGE, fishRegistry.getAttackDamage())
+                .add(Attributes.TEMPT_RANGE, 10.0);
     }
 
     public static void init() {

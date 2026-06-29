@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "i": "minecraft:iron_ingot",
+    "s": "minecraft:string"
+  },
+  "pattern": [
+    "  i",
+    " is",
+    "i s"
+  ],
+  "result": {
+    "count": 1,
+    "id": "fishingfrenzy:deluxe_fishing_rod"
+  }
+}

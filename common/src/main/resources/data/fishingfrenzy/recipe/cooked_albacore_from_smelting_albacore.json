@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "category": "food",
+  "cookingtime": 200,
+  "experience": 0.35,
+  "group": "albacore",
+  "ingredient": "fishingfrenzy:albacore",
+  "result": {
+    "id": "fishingfrenzy:cooked_albacore"
+  }
+}

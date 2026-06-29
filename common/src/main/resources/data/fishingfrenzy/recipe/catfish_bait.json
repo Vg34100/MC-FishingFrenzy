@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "fishingfrenzy:targeted_bait",
+  "ingredients": [
+    "fishingfrenzy:catfish"
+  ],
+  "result": {
+    "count": 2,
+    "id": "fishingfrenzy:catfish_bait"
+  }
+}

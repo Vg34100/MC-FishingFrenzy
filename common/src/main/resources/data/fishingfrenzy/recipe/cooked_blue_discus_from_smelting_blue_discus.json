@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "category": "food",
+  "cookingtime": 200,
+  "experience": 0.35,
+  "group": "blue_discus",
+  "ingredient": "fishingfrenzy:blue_discus",
+  "result": {
+    "id": "fishingfrenzy:cooked_blue_discus"
+  }
+}
