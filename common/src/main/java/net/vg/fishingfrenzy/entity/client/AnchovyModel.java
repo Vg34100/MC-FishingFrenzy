@@ -5,47 +5,50 @@ package net.vg.fishingfrenzy.entity.client;// Made with Blockbench 4.10.4
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.model.HierarchicalModel;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.*;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.vg.fishingfrenzy.entity.mob.CustomBreedableSchoolingFishEntity;
 
-public class AnchovyModel extends HierarchicalModel<CustomBreedableSchoolingFishEntity> {
+public class AnchovyModel extends EntityModel<LivingEntityRenderState> {
 	// This layer location should be baked with EntityRendererProvider.Context in the entity renderer and passed into this model's constructor
-	public static final ModelLayerLocation LAYER_LOCATION = new ModelLayerLocation(ResourceLocation.fromNamespaceAndPath("fishingfrenzy", "anchovy"), "main");
+	public static final ModelLayerLocation LAYER_LOCATION = new ModelLayerLocation(Identifier.fromNamespaceAndPath("fishingfrenzy", "anchovy"), "main");
 	private final ModelPart anchovy;
+	private final ModelPart main;
 	private final ModelPart head;
+	private final ModelPart tail;
 
 	public AnchovyModel(ModelPart root) {
+        super(root.getChild("anchovy"));
 		this.anchovy = root.getChild("anchovy");
-		this.head = anchovy.getChild("main").getChild("head");
-
+		this.main = anchovy.getChild("main");
+		this.head = main.getChild("head");
+		this.tail = main.getChild("tail");
 	}
 
 	public static LayerDefinition createBodyLayer() {
 		MeshDefinition meshdefinition = new MeshDefinition();
 		PartDefinition partdefinition = meshdefinition.getRoot();
 
-		PartDefinition anchovy = partdefinition.addOrReplaceChild("anchovy", CubeListBuilder.create(), PartPose.offset(0.0F, 24.0F, 0.0F));
+		PartDefinition anchovy = partdefinition.addOrReplaceChild("anchovy", CubeListBuilder.create(), PartPose.offset(0.0F, 26.0F, 1.0F));
 
 		PartDefinition main = anchovy.addOrReplaceChild("main", CubeListBuilder.create(), PartPose.offset(0.0F, 0.0F, 0.0F));
 
 		PartDefinition head = main.addOrReplaceChild("head", CubeListBuilder.create().texOffs(0, 8).addBox(-1.0F, -5.0F, -5.0F, 2.0F, 3.0F, 3.0F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 0.0F, 0.0F));
 
 		PartDefinition torso = main.addOrReplaceChild("torso", CubeListBuilder.create().texOffs(0, 0).addBox(-1.0F, -5.0F, -2.0F, 2.0F, 3.0F, 5.0F, new CubeDeformation(0.0F))
-		.texOffs(7, 5).addBox(0.0F, -6.0F, -2.0F, 0.0F, 1.0F, 3.0F, new CubeDeformation(0.0F))
-		.texOffs(0, 1).addBox(0.0F, -2.0F, -1.0F, 0.0F, 1.0F, 2.0F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 0.0F, 0.0F));
+		.texOffs(7, 5).addBox(0.0F, -6.0F, -2.0F, 0.1F, 1.0F, 3.0F, new CubeDeformation(0.0F))
+		.texOffs(0, 1).addBox(0.0F, -2.0F, -1.0F, 0.1F, 1.0F, 2.0F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 0.0F, 0.0F));
 
 		PartDefinition tail = main.addOrReplaceChild("tail", CubeListBuilder.create(), PartPose.offset(0.0F, 0.0F, 0.0F));
 
-		PartDefinition cube_r1 = tail.addOrReplaceChild("cube_r1", CubeListBuilder.create().texOffs(0, 7).addBox(0.99F, -2.0F, 0.0F, 0.0F, 2.0F, 1.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(-1.0F, -2.0F, 4.0F, 0.8727F, 0.0F, 0.0F));
+		PartDefinition cube_r1 = tail.addOrReplaceChild("cube_r1", CubeListBuilder.create().texOffs(0, 7).addBox(0.99F, -2.0F, 0.0F, 0.1F, 2.0F, 1.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(-1.0F, -2.0F, 4.0F, 0.8727F, 0.0F, 0.0F));
 
-		PartDefinition cube_r2 = tail.addOrReplaceChild("cube_r2", CubeListBuilder.create().texOffs(0, 0).addBox(1.01F, -1.0F, -1.0F, 0.0F, 1.0F, 2.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(-1.0F, -4.0F, 4.0F, 0.8727F, 0.0F, 0.0F));
+		PartDefinition cube_r2 = tail.addOrReplaceChild("cube_r2", CubeListBuilder.create().texOffs(0, 0).addBox(1.01F, -1.0F, -1.0F, 0.1F, 1.0F, 2.0F, new CubeDeformation(0.0F)), PartPose.offsetAndRotation(-1.0F, -4.0F, 4.0F, 0.8727F, 0.0F, 0.0F));
 
 		return LayerDefinition.create(meshdefinition, 16, 16);
 	}
@@ -61,28 +64,28 @@ public class AnchovyModel extends HierarchicalModel<CustomBreedableSchoolingFish
 //	}
 
 	private void setHeadAngles(float headYaw, float headPitch) {
-		headYaw = Mth.clamp(headYaw, -10.0f, 10.0f);
-		headPitch = Mth.clamp(headPitch, -5.0f, 25.0f);
+		headYaw = Mth.clamp(headYaw, -12.0f, 12.0f);
+		headPitch = Mth.clamp(headPitch, -8.0f, 8.0f);
 
 		this.head.yRot = headYaw * 0.017456292F;
 		this.head.xRot = headPitch * 0.017456292F;
 	}
 
-
-
-	@Override
-	public void renderToBuffer(PoseStack poseStack, VertexConsumer vertexConsumer, int i, int j, int k) {
-		anchovy.render(poseStack, vertexConsumer, i, j, k);
+	private void applySwimmingAnimation(LivingEntityRenderState state) {
+		float swimWave = Mth.sin(state.ageInTicks * 0.6F);
+		float swimScale = state.isInWater ? 1.0F : 1.4F;
+		this.main.yRot += -0.05F * swimWave * swimScale;
+		this.tail.yRot += -0.22F * swimWave * swimScale;
 	}
 
-	@Override
-	public ModelPart root() {
-		return anchovy;
-	}
+
+
+
 
 	@Override
-	public void setupAnim(CustomBreedableSchoolingFishEntity entity, float f, float g, float h, float i, float j) {
+	public void setupAnim(LivingEntityRenderState state) {
 		this.root().getAllParts().forEach(ModelPart::resetPose);
-		this.setHeadAngles(i, j);
+		this.setHeadAngles(state.yRot, state.xRot);
+		this.applySwimmingAnimation(state);
 	}
 }

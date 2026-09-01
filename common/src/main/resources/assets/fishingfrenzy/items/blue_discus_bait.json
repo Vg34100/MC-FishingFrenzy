@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fishingfrenzy:item/blue_discus_bait",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -7605051
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -15539084
+      }
+    ]
+  }
+}

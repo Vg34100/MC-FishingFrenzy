@@ -1,0 +1,264 @@
+import java.util.Properties
+
+plugins {
+    id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT'
+    id 'architectury-plugin' version '3.5-SNAPSHOT'
+}
+
+def matrixPropertiesFile = rootProject.file("gradle/matrix/${project.name}.properties")
+if (!matrixPropertiesFile.isFile()) {
+    throw new GradleException("Missing matrix properties for ${project.path}: ${matrixPropertiesFile}")
+}
+
+def matrix = new Properties()
+matrixPropertiesFile.withInputStream { matrix.load(it) }
+def matrixValue = { String key ->
+    def value = matrix.getProperty(key)
+    if (value == null) {
+        throw new GradleException("Missing '${key}' in ${matrixPropertiesFile}")
+    }
+    value
+}
+
+def loader = matrixValue('loader')
+def isFabric = loader == 'fabric'
+def isNeoForge = loader == 'neoforge'
+if (!isFabric && !isNeoForge) {
+    throw new GradleException("Unsupported matrix loader '${loader}' for ${project.path}")
+}
+// NeoForge 26.1 and 26.1.1 still publish BlockEvent.BreakEvent, while
+// Architectury 20.x was compiled against its later renamed BreakBlockEvent.
+// Build a bytecode-compatible Architectury jar for those two development
+// targets rather than shipping a fake NeoForge class or changing gameplay code.
+def isEarlyNeoForge = isNeoForge && ['26.1', '26.1.1'].contains(matrixValue('minecraft_version'))
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+
+base {
+    archivesName = "${rootProject.archives_name}-${loader}-${matrixValue('minecraft_version')}"
+}
+
+repositories {
+    maven { url 'https://maven.terraformersmc.com/' }
+    maven { url 'https://maven.neoforged.net/releases/' }
+}
+
+architectury {
+    // Unlike the original subprojects, Stonecutter nodes do not inherit the
+    // root Architectury configuration.  This must be set before selecting a
+    // loader so Loom constructs the matching game/provider pipeline.
+    minecraft = matrixValue('minecraft_version')
+    platformSetupLoomIde()
+    if (isFabric) {
+        fabric()
+    } else {
+        neoForge()
+    }
+}
+
+if (isNeoForge) {
+    // Architectury's transform declaration is not itself Loom's platform switch.
+    // Set the latter explicitly so the generated node receives NeoForge's patched
+    // Minecraft runtime, FML launch arguments, and development configurations.
+    loom {
+        neoForge { }
+    }
+}
+
+if (isEarlyNeoForge) {
+    configurations {
+        earlyArchitecturyOriginal { canBeResolved = true; canBeConsumed = false }
+        earlyArchitecturySources { canBeResolved = true; canBeConsumed = false }
+    }
+
+    def compatibilitySourceDir = layout.buildDirectory.dir('early-architectury-source')
+    def compatibilityClassesDir = layout.buildDirectory.dir('early-architectury-classes')
+
+    def prepareEarlyArchitecturySource = tasks.register('prepareEarlyArchitecturySource', Sync) {
+        from { zipTree(configurations.earlyArchitecturySources.singleFile) }
+        include 'dev/architectury/event/forge/EventHandlerImplCommon.java'
+        into compatibilitySourceDir
+        filteringCharset = 'UTF-8'
+        filter { line ->
+            line.replace('net.neoforged.neoforge.event.level.block.BreakBlockEvent',
+                    'net.neoforged.neoforge.event.level.BlockEvent.BreakEvent')
+                .replace('event(BreakBlockEvent event)', 'event(BreakEvent event)')
+        }
+    }
+    def compileEarlyArchitecturyCompatibility = tasks.register('compileEarlyArchitecturyCompatibility', JavaCompile) {
+        dependsOn prepareEarlyArchitecturySource
+        source compatibilitySourceDir
+        // Do not use main.compileClasspath here: it includes the patched jar
+        // produced below and would make this helper task depend on itself.
+        classpath = files {
+            configurations.compileClasspath.files.findAll {
+                !it.name.equals('architectury-neoforge-compat.jar')
+            }
+        }
+        destinationDirectory = compatibilityClassesDir
+        options.release = 25
+    }
+    def patchEarlyArchitectury = tasks.register('patchEarlyArchitectury', Zip) {
+        dependsOn compileEarlyArchitecturyCompatibility
+        from({ zipTree(configurations.earlyArchitecturyOriginal.singleFile) }) {
+            exclude 'dev/architectury/event/forge/EventHandlerImplCommon*.class'
+        }
+        from compatibilityClassesDir
+        archiveFileName = 'architectury-neoforge-compat.jar'
+        destinationDirectory = layout.buildDirectory.dir('early-architectury')
+    }
+    tasks.withType(JavaCompile).configureEach {
+        if (name != 'compileEarlyArchitecturyCompatibility') {
+            dependsOn patchEarlyArchitectury
+        }
+    }
+    tasks.matching { it.name in ['processResources', 'configureLaunch', 'configureClientLaunch'] }.configureEach {
+        dependsOn patchEarlyArchitectury
+    }
+    ext.earlyPatchedArchitectury = patchEarlyArchitectury.flatMap { it.archiveFile }
+}
+
+// Mirror the configuration shape Architectury's normal NeoForge module uses.  The
+// version nodes are standalone projects, so they do not inherit this from the
+// original loader subproject.
+if (isNeoForge) {
+    configurations {
+        common {
+            canBeResolved = true
+            canBeConsumed = false
+        }
+        compileClasspath.extendsFrom common
+        runtimeClasspath.extendsFrom common
+        developmentNeoForge.extendsFrom common
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            if (matrixValue('minecraft_version') == '26.2') {
+                setSrcDirs([
+                        layout.buildDirectory.dir('matrix-sources/common').get().asFile,
+                        layout.buildDirectory.dir("matrix-sources/${loader}").get().asFile
+                ])
+            } else {
+                setSrcDirs([
+                        rootProject.file('common/src/main/java'),
+                        rootProject.file("${loader}/src/main/java")
+                ])
+            }
+        }
+        resources {
+            setSrcDirs([
+                    rootProject.file('common/src/main/resources'),
+                    rootProject.file("${loader}/src/main/resources")
+            ])
+            if (isFabric) {
+                srcDir rootProject.file('fabric/src/main/generated')
+            }
+        }
+    }
+}
+
+// 26.2 moved a small number of vanilla advancement classes. Keep the canonical
+// source on the 26.1.2 names and generate the mechanically adjusted 26.2 view.
+// This avoids duplicate source trees while making each matrix target explicit.
+if (matrixValue('minecraft_version') == '26.2') {
+    def advancementPackageReplacements = [
+            'net.minecraft.advancements.criterion.MinMaxBounds': 'net.minecraft.advancements.predicates.MinMaxBounds',
+            'net.minecraft.advancements.CriteriaTriggers': 'net.minecraft.advancements.triggers.CriteriaTriggers',
+            'this.minecraft.setScreen(': 'this.minecraft.setScreenAndShow(',
+            'valueLookupBuilder(': 'builder(',
+            'ItemTags.FLOWERS': 'net.minecraft.tags.BlockItemTags.FLOWERS.item()',
+            '.add(ModItems.DELUXE_FISHING_ROD.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(ModItems.DELUXE_FISHING_ROD.get()).orElseThrow())',
+            '.add(bait.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(bait.get()).orElseThrow())',
+            '.add(fish.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(fish.get()).orElseThrow())',
+            '.add(cookedfish.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(cookedfish.get()).orElseThrow())'
+    ]
+    ['common', loader].each { sourceName ->
+        tasks.register("prepare${sourceName.capitalize()}26_2Sources", Sync) {
+            from rootProject.file("${sourceName}/src/main/java")
+            into layout.buildDirectory.dir("matrix-sources/${sourceName}")
+            filteringCharset = 'UTF-8'
+            inputs.property('compatibilityReplacements', advancementPackageReplacements)
+            filter { line ->
+                advancementPackageReplacements.inject(line) { adjusted, from, to -> adjusted.replace(from, to) }
+            }
+        }
+    }
+    tasks.named('compileJava') {
+        dependsOn tasks.named('prepareCommon26_2Sources')
+        dependsOn tasks.named("prepare${loader.capitalize()}26_2Sources")
+    }
+}
+
+dependencies {
+    // Loom requires a declared Minecraft game dependency for every generated node. Its
+    // NeoForge platform wiring replaces this with the matching merged runtime at launch.
+    minecraft "net.minecraft:minecraft:${matrixValue('minecraft_version')}"
+    if (isFabric) {
+        implementation "net.fabricmc:fabric-loader:${matrixValue('fabric_loader_version')}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${matrixValue('fabric_api_version')}"
+        implementation "dev.architectury:architectury-fabric:${matrixValue('architectury_api_version')}"
+        implementation "com.terraformersmc:modmenu:${matrixValue('modmenu_version')}"
+        if (matrix.getProperty('mixinextras_version') != null) {
+            implementation "io.github.llamalad7:mixinextras-fabric:${matrixValue('mixinextras_version')}"
+        }
+    } else {
+        neoForge "net.neoforged:neoforge:${matrixValue('neoforge_version')}"
+        if (isEarlyNeoForge) {
+            earlyArchitecturyOriginal "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
+            earlyArchitecturySources "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}:sources"
+            compileOnly "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
+            implementation files(earlyPatchedArchitectury)
+        } else {
+            implementation "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
+        }
+        if (matrix.getProperty('mixinextras_version') != null) {
+            implementation "io.github.llamalad7:mixinextras-neoforge:${matrixValue('mixinextras_version')}"
+        }
+        compileOnly 'net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7'
+    }
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', matrixValue('minecraft_version')
+    inputs.property 'architectury_api_version', matrixValue('architectury_api_version')
+    if (isFabric) {
+        filesMatching('fabric.mod.json') {
+            expand version: project.version, minecraft_version: matrixValue('minecraft_version')
+        }
+    } else {
+        inputs.property 'neoforge_version', matrixValue('neoforge_version')
+        filesMatching('META-INF/neoforge.mods.toml') {
+            expand version: project.version,
+                    minecraft_version: matrixValue('minecraft_version'),
+                    neoforge_version: matrixValue('neoforge_version'),
+                    architectury_api_version: matrixValue('architectury_api_version')
+        }
+    }
+}
+
+loom {
+    runs {
+        configureEach {
+            runDir = rootProject.file("runs/${project.name}/${name}")
+        }
+    }
+}
+
+tasks.named('jar') {
+    destinationDirectory = rootProject.layout.buildDirectory.dir("libs/${project.name}")
+}

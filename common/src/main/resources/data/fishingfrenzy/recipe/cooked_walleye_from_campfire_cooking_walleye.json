@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:campfire_cooking",
+  "category": "food",
+  "cookingtime": 600,
+  "experience": 0.35,
+  "group": "walleye",
+  "ingredient": "fishingfrenzy:walleye",
+  "result": {
+    "id": "fishingfrenzy:cooked_walleye"
+  }
+}

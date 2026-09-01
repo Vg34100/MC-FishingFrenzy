@@ -1,6 +1,6 @@
 package net.vg.fishingfrenzy.util;
 
-import net.minecraft.advancements.critereon.MinMaxBounds;
+import net.minecraft.advancements.criterion.MinMaxBounds;
 
 public enum HeightRanges {
     SKY_LEVEL(MinMaxBounds.Doubles.atLeast(150.0)),

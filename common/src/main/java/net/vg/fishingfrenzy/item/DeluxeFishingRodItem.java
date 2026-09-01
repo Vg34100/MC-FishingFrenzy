@@ -9,7 +9,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.stats.Stats;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.SlotAccess;
@@ -22,9 +22,11 @@ import net.minecraft.world.inventory.tooltip.BundleTooltip;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.BundleContents;
+import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -37,9 +39,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class DeluxeFishingRodItem extends FishingRodItem {
-    private static final int BAR_COLOR = Mth.color(0.4F, 0.4F, 1.0F);
+    private static final int BAR_COLOR = 0xFF6666FF;
     private static final int TOOLTIP_MAX_WEIGHT = 64;
 
     public DeluxeFishingRodItem(Properties pProperties) {
@@ -47,14 +51,14 @@ public class DeluxeFishingRodItem extends FishingRodItem {
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level pLevel, Player pPlayer, InteractionHand pHand) {
+    public InteractionResult use(Level pLevel, Player pPlayer, InteractionHand pHand) {
         ItemStack rodStack = pPlayer.getItemInHand(pHand);
         ItemStack baitStack = findBaitInBundle(rodStack);
 
         if (pPlayer.fishing != null) {
-            if (!pLevel.isClientSide) {
+            if (!pLevel.isClientSide()) {
                 int i = pPlayer.fishing.retrieve(rodStack);
-                rodStack.hurtAndBreak(i, pPlayer, LivingEntity.getSlotForHand(pHand));
+                rodStack.hurtAndBreak(i, pPlayer, pHand);
             }
 
             pLevel.playSound((Player)null, pPlayer.getX(), pPlayer.getY(), pPlayer.getZ(), SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 1.0F, 0.4F / (pLevel.getRandom().nextFloat() * 0.4F + 0.8F));
@@ -68,18 +72,17 @@ public class DeluxeFishingRodItem extends FishingRodItem {
                 if (!baitStack.isEmpty()) {
                     BaitProperties baitProperties = (BaitProperties) baitStack.getItem();
                     luckLevel += baitProperties.getLuckBonus();
-                    lureLevel *= baitProperties.getLureBonus();
+                    lureLevel += baitProperties.getLureBonus();
                 }
 
-
-                pLevel.addFreshEntity(new DeluxeFishingHook(pPlayer, pLevel, luckLevel, lureLevel, baitStack)); // add new bobber
+                serverlevel.addFreshEntity(new DeluxeFishingHook(pPlayer, pLevel, luckLevel, lureLevel, baitStack));
             }
 
             pPlayer.awardStat(Stats.ITEM_USED.get(this));
             pPlayer.gameEvent(GameEvent.ITEM_INTERACT_START);
         }
 
-        return InteractionResultHolder.sidedSuccess(rodStack, pLevel.isClientSide());
+        return InteractionResult.SUCCESS;
 
     }
 
@@ -149,9 +152,11 @@ public class DeluxeFishingRodItem extends FishingRodItem {
         if (bundleContentsComponent.isEmpty()) {
             return ItemStack.EMPTY;
         }
-        for (ItemStack itemStack : bundleContentsComponent.items()) {
-            if (isBait(itemStack)) {
-                return itemStack;
+        for (ItemStackTemplate template : bundleContentsComponent.items()) {
+            if (template.item().value() instanceof BaitItem) {
+                return template.create();
+//                return template.toStack();
+//                I am unsure if this is the correct one.
             }
         }
         return ItemStack.EMPTY;
@@ -159,20 +164,14 @@ public class DeluxeFishingRodItem extends FishingRodItem {
 
     public void decrementBaitInBundle(ItemStack rodStack) {
         BundleContents bundleContentsComponent = rodStack.getOrDefault(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
-        List<ItemStack> originalStacks = (List<ItemStack>) bundleContentsComponent.items();
-        List<ItemStack> stacks = new ArrayList<>(originalStacks);
+        List<ItemStack> stacks = bundleContentsComponent.itemCopyStream().collect(Collectors.toList());
         Random random = new Random();
 
         boolean modified = false;
         for (ItemStack itemStack : stacks) {
-            if (isBait(itemStack)) {
-                BaitProperties baitProperties = (BaitProperties) itemStack.getItem();
+            if (itemStack.getItem() instanceof BaitProperties baitProperties) {
                 if (random.nextFloat() <= baitProperties.getUseChance()) {
-                    if (itemStack.getCount() > 1) {
-                        itemStack.shrink(1);
-                    } else {
-                        stacks.remove(itemStack);
-                    }
+                    itemStack.shrink(1);
                     modified = true;
                 }
                 break;
@@ -180,47 +179,60 @@ public class DeluxeFishingRodItem extends FishingRodItem {
         }
 
         if (modified) {
+            stacks.removeIf(ItemStack::isEmpty);
             if (stacks.isEmpty()) {
                 rodStack.set(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
             } else {
-                rodStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(stacks));
+                List<ItemStackTemplate> templates = stacks.stream()
+                        .map(s -> new ItemStackTemplate(s.getItem(), s.getCount()))
+                        .collect(Collectors.toList());
+                rodStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(templates));
             }
         }
     }
 
 
-    public boolean isBundleBarVisible(ItemStack stack) {
+    @Override
+    public boolean isBarVisible(ItemStack stack) {
         BundleContents bundleContents = (BundleContents)stack.getOrDefault(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
-        return bundleContents.weight().compareTo(Fraction.ZERO) > 0;
+        return bundleContents.weight().result().map(w -> w.compareTo(Fraction.ZERO) > 0).orElse(false);
     }
 
-    public int getBundleBarWidth(ItemStack stack) {
+    @Override
+    public int getBarWidth(ItemStack stack) {
         BundleContents bundleContents = (BundleContents)stack.getOrDefault(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
-        return Math.min(1 + Mth.mulAndTruncate(bundleContents.weight(), 12), 13);
+        return bundleContents.weight().result().map(w -> Math.min(1 + Mth.mulAndTruncate(w, 12), 13)).orElse(0);
     }
 
-    public int getBundleBarColor() {
+    @Override
+    public int getBarColor(ItemStack stack) {
         return BAR_COLOR;
     }
 
+    @Override
     public Optional<TooltipComponent> getTooltipImage(ItemStack stack) {
-        return !stack.has(DataComponents.HIDE_TOOLTIP) && !stack.has(DataComponents.HIDE_ADDITIONAL_TOOLTIP) ? Optional.ofNullable((BundleContents)stack.get(DataComponents.BUNDLE_CONTENTS)).map(BundleTooltip::new) : Optional.empty();
+        BundleContents contents = stack.get(DataComponents.BUNDLE_CONTENTS);
+        if (contents == null || contents.isEmpty()) return Optional.empty();
+        return Optional.of(new BundleTooltip(contents));
     }
 
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
-        BundleContents bundleContents = (BundleContents)stack.get(DataComponents.BUNDLE_CONTENTS);
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> addLine, TooltipFlag tooltipFlag) {
+        BundleContents bundleContents = stack.get(DataComponents.BUNDLE_CONTENTS);
+        addLine.accept(Component.translatable("item.fishingfrenzy.deluxe_fishing_rod.hint").withStyle(ChatFormatting.DARK_GRAY));
         if (bundleContents != null) {
-            int i = Mth.mulAndTruncate(bundleContents.weight(), 64);
-            tooltipComponents.add(Component.translatable("item.minecraft.bundle.fullness", new Object[]{i, 64}).withStyle(ChatFormatting.GRAY));
+            int used = bundleContents.weight().result().map(w -> Mth.mulAndTruncate(w, 64)).orElse(0);
+            addLine.accept(Component.literal("Bait: " + used + "/64").withStyle(ChatFormatting.GRAY));
         }
-
     }
 
     public void onDestroyed(ItemEntity itemEntity) {
         BundleContents bundleContents = (BundleContents)itemEntity.getItem().get(DataComponents.BUNDLE_CONTENTS);
         if (bundleContents != null) {
             itemEntity.getItem().set(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
-            ItemUtils.onContainerDestroyed(itemEntity, bundleContents.itemsCopy());
+//            ItemUtils.onContainerDestroyed(itemEntity, bundleContents.itemsCopy());
+            ItemUtils.onContainerDestroyed(itemEntity, bundleContents.itemCopyStream());
+
         }
     }
 

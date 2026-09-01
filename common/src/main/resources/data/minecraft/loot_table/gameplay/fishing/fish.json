@@ -1,0 +1,162 @@
+{
+  "type": "minecraft:fishing",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:cod",
+          "weight": 60
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:salmon",
+          "weight": 25
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:tropical_fish",
+          "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:pufferfish",
+          "weight": 13
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:anchovy",
+          "weight": 60,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:anchovy_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:albacore",
+          "weight": 50,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:albacore_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:blue_discus",
+          "weight": 50,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:blue_discus_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:bream",
+          "weight": 50,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "position": {
+                  "y": {
+                    "min": 0.0,
+                    "max": 70.0
+                  }
+                }
+              }
+            },
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:freshwater_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:bullhead",
+          "weight": 50,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "position": {
+                  "y": {
+                    "min": 0.0,
+                    "max": 70.0
+                  }
+                }
+              }
+            },
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:freshwater_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:catfish",
+          "weight": 1,
+          "quality": 3,
+          "conditions": [
+            {
+              "condition": "minecraft:weather_check",
+              "raining": true,
+              "thundering": false
+            },
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:freshwater_fishing_biomes"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "fishingfrenzy:woodskip",
+          "weight": 50,
+          "conditions": [
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "position": {
+                  "y": {
+                    "min": 0.0,
+                    "max": 70.0
+                  }
+                }
+              }
+            },
+            {
+              "condition": "minecraft:location_check",
+              "predicate": {
+                "biomes": "#fishingfrenzy:freshwater_fishing_biomes"
+              }
+            }
+          ]
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:gameplay/fishing/fish"
+}

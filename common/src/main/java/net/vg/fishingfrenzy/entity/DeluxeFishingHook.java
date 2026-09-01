@@ -1,15 +1,16 @@
 package net.vg.fishingfrenzy.entity;
 
-import dev.architectury.platform.Platform;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.server.TickTask;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -21,11 +22,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.level.Level;
 import net.vg.fishingfrenzy.Constants;
+import net.vg.fishingfrenzy.FishingFrenzy;
 import net.vg.fishingfrenzy.item.DeluxeFishingRodItem;
 import net.vg.fishingfrenzy.item.bait.BaitItem;
+import net.vg.fishingfrenzy.item.fish.FishManager;
 import net.vg.fishingfrenzy.mixin.FishingHookAccessor;
 import net.vg.fishingfrenzy.registry.ModItems;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Objects;
 
@@ -62,7 +67,7 @@ public class DeluxeFishingHook extends FishingHook {
     public int retrieve(ItemStack usedItem) {
         Constants.LOGGER.debug("Retrieve");
         Player player = this.getPlayerOwner();
-        if (this.level().isClientSide || player == null || this.removeIfInvalid(player)) {
+        if (this.level().isClientSide() || player == null || this.removeIfInvalid(player)) {
             return 0;
         }
         int i = 0;
@@ -77,23 +82,12 @@ public class DeluxeFishingHook extends FishingHook {
 //                    .withParameter(LootContextParams.TOOL, usedItem)
 //                    .withParameter(LootContextParams.THIS_ENTITY, this)
 //                    .withLuck((float)this.luckBonus + player.getLuck());
-            LootParams lootParams;
-            if (Platform.isFabric()) {
-                lootParams = (new LootParams.Builder((ServerLevel)this.level()))
-                        .withParameter(LootContextParams.ORIGIN, this.position())
-                        .withParameter(LootContextParams.TOOL, usedItem)
-                        .withParameter(LootContextParams.THIS_ENTITY, this)
-                        .withLuck((float)this.luckBonus + player.getLuck())
-                        .create(LootContextParamSets.FISHING);
-            } else {
-                lootParams = (new LootParams.Builder((ServerLevel)this.level()))
-                        .withParameter(LootContextParams.ORIGIN, this.position())
-                        .withParameter(LootContextParams.TOOL, usedItem)
-                        .withParameter(LootContextParams.THIS_ENTITY, this)
-                        .withParameter(LootContextParams.ATTACKING_ENTITY, null)
-                        .withLuck((float)this.luckBonus + player.getLuck())
-                        .create(LootContextParamSets.FISHING);
-            }
+            LootParams lootParams = (new LootParams.Builder((ServerLevel)this.level()))
+                    .withParameter(LootContextParams.ORIGIN, this.position())
+                    .withParameter(LootContextParams.TOOL, usedItem)
+                    .withParameter(LootContextParams.THIS_ENTITY, this)
+                    .withLuck((float)this.luckBonus + player.getLuck())
+                    .create(LootContextParamSets.FISHING);
 
 
             LootTable lootTable = Objects.requireNonNull(this.level().getServer()).reloadableRegistries().getLootTable(BuiltInLootTables.FISHING);
@@ -138,7 +132,7 @@ public class DeluxeFishingHook extends FishingHook {
                         }
 
                         // Schedule the spawn with increasing delay
-                        this.level().getServer().tell(new TickTask(l * 5, () -> {
+                        this.level().getServer().schedule(new TickTask(l * 5, () -> {
                             spawnCaughtItem(spawnStack, player, d, e, f, index);
                         }));
 
@@ -147,7 +141,7 @@ public class DeluxeFishingHook extends FishingHook {
                 }
 
                 // Experience
-                player.level().addFreshEntity(new ExperienceOrb(player.level(), player.getX(), player.getY() + 0.5, player.getZ() + 0.5, this.random.nextInt(6) + 1));
+                if (player.level() instanceof ServerLevel sl) sl.addFreshEntity(new ExperienceOrb(player.level(), player.getX(), player.getY() + 0.5, player.getZ() + 0.5, this.random.nextInt(6) + 1));
                 // Decrease bait stack in the bundle
                 if (!baitStack.isEmpty()) {
                     DeluxeFishingRodItem fishingRod = (DeluxeFishingRodItem) usedItem.getItem();
@@ -168,6 +162,10 @@ public class DeluxeFishingHook extends FishingHook {
     }
 
     private void spawnCaughtItem(ItemStack itemStack, Player player, double d, double e, double f, int index) {
+        if (FishManager.FISH_REGISTRY_MAP.containsKey("cobblestone_fish")
+                && itemStack.is(FishManager.FISH_REGISTRY_MAP.get("cobblestone_fish").getFishRegistry().get())) {
+            itemStack = new ItemStack(Items.COBBLESTONE);
+        }
         double v = Math.sqrt(Math.sqrt(d * d + e * e + f * f)) * 0.08;
 
         // Add larger variation to spawn position
@@ -187,9 +185,55 @@ public class DeluxeFishingHook extends FishingHook {
                 f * 0.1 + offsetZ * 0.05
         );
 
-        // Schedule the entity spawn with a longer delay
-        this.level().addFreshEntity(itemEntity);
+        net.minecraft.world.entity.Entity spawnEntity = convertFishingRealEntity(itemEntity, player);
+        if (this.level() instanceof ServerLevel sl) sl.addFreshEntity(spawnEntity);
 
-        Constants.LOGGER.info("Spawned item " + (index + 1) + ": " + itemStack.getItem().getName(itemStack).getString() + " at " + itemEntity.position());
+        Constants.LOGGER.info("Spawned item " + (index + 1) + ": " + itemStack.getItem().getName(itemStack).getString() + " at " + spawnEntity.position());
+    }
+
+    private Entity convertFishingRealEntity(ItemEntity itemEntity, Player player) {
+        if (!FishingFrenzy.isFishingRealCompatEnabled()) {
+            return itemEntity;
+        }
+        try {
+            Class<?> fishingReal = Class.forName("koala.fishingreal.FishingReal");
+            Method method;
+            try {
+                method = fishingReal.getMethod("convertItemEntity", Entity.class, Player.class);
+            } catch (NoSuchMethodException ignored) {
+                method = null;
+                for (Method candidate : fishingReal.getDeclaredMethods()) {
+                    if (!candidate.getName().equals("convertItemEntity")) {
+                        continue;
+                    }
+                    Class<?>[] params = candidate.getParameterTypes();
+                    if (params.length != 2) {
+                        continue;
+                    }
+                    if (!Entity.class.isAssignableFrom(params[0]) || !Player.class.isAssignableFrom(params[1])) {
+                        continue;
+                    }
+                    if (!Modifier.isStatic(candidate.getModifiers())) {
+                        continue;
+                    }
+                    candidate.setAccessible(true);
+                    method = candidate;
+                    break;
+                }
+            }
+
+            if (method != null) {
+                Object converted = method.invoke(null, itemEntity, player);
+                if (converted instanceof Entity entity) {
+                    return entity;
+                }
+                Constants.LOGGER.debug("Fishing Real convertItemEntity returned non-Entity, using normal item entity.");
+            } else {
+                Constants.LOGGER.debug("Fishing Real convertItemEntity method not found, using normal item entity.");
+            }
+        } catch (Throwable throwable) {
+            Constants.LOGGER.debug("Fishing Real compat failed, using normal caught item entity.", throwable);
+        }
+        return itemEntity;
     }
 }

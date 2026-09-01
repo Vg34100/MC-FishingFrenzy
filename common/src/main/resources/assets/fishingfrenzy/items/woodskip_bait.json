@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fishingfrenzy:item/woodskip_bait",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -7509425
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -9480641
+      }
+    ]
+  }
+}

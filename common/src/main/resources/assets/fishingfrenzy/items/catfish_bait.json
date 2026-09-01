@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fishingfrenzy:item/catfish_bait",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -11253956
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -11974069
+      }
+    ]
+  }
+}

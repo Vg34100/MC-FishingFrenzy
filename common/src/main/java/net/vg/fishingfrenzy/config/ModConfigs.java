@@ -10,11 +10,13 @@ public class ModConfigs {
     private static ModConfigProvider configs;
 
     public static boolean EASY_MODE;
+    public static boolean FISHINGREAL_COMPAT_ENABLED;
 
 
 
     public static String[] necessaryConfigs = {
-        "config.easy.mode"
+        "config.easy.mode",
+        "config.compat.fishingreal.enabled"
     };
 
     public static void registerConfigs() {
@@ -33,6 +35,10 @@ public class ModConfigs {
                 "Makes the fish easier to get by removing the weather, time, and height conditions",
                 "Default: false"
         ));
+        configs.addKeyValuePair(new Pair<>("config.compat.fishingreal.enabled", true), Arrays.asList(
+                "Enable compatibility bridge for Fishing Real when installed",
+                "Default: true"
+        ));
 
     }
 
@@ -40,6 +46,7 @@ public class ModConfigs {
         Constants.LOGGER.info("Assigning configuration values.");
         // Assign configuration values to fields
         EASY_MODE = CONFIG.getOrDefault("config.easy.mode", false);
+        FISHINGREAL_COMPAT_ENABLED = CONFIG.getOrDefault("config.compat.fishingreal.enabled", true);
 
 
         Constants.LOGGER.info("All {} configurations have been set properly.", configs.getConfigsList().size());
@@ -48,6 +55,7 @@ public class ModConfigs {
     public static void saveConfigs() {
         Constants.LOGGER.info("Saving current configuration values.");
         CONFIG.set("config.easy.mode", EASY_MODE);
+        CONFIG.set("config.compat.fishingreal.enabled", FISHINGREAL_COMPAT_ENABLED);
 
 
         CONFIG.save();

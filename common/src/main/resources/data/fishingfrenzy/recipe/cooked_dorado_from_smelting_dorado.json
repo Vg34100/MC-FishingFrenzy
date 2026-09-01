@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "category": "food",
+  "cookingtime": 200,
+  "experience": 0.35,
+  "group": "dorado",
+  "ingredient": "fishingfrenzy:dorado",
+  "result": {
+    "id": "fishingfrenzy:cooked_dorado"
+  }
+}

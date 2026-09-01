@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fishingfrenzy:item/bream_bait",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -9259315
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -8421141
+      }
+    ]
+  }
+}

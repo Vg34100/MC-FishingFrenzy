@@ -1,0 +1,37 @@
+plugins {
+    id 'dev.kikugie.stonecutter'
+}
+
+// This is the version shown to the IDE. Matrix tasks compile every registered node.
+stonecutter.active '26.1.2-fabric'
+
+def matrixTargets = [
+        '26.1-fabric', '26.1-neoforge',
+        '26.1.1-fabric', '26.1.1-neoforge',
+        '26.1.2-fabric', '26.1.2-neoforge',
+        '26.2-fabric', '26.2-neoforge'
+]
+
+tasks.register('compileMatrix') {
+    group = 'verification'
+    description = 'Compiles every supported Minecraft-version and loader combination.'
+    dependsOn matrixTargets.collect { ":${it}:compileJava" }
+}
+
+tasks.register('packageMatrix') {
+    group = 'build'
+    description = 'Processes resources and assembles one jar for every matrix target.'
+    dependsOn matrixTargets.collect { ":${it}:jar" }
+}
+
+tasks.register('verifyServerLaunchSetup') {
+    group = 'verification'
+    description = 'Generates dedicated-server launch configuration for every matrix target without starting Minecraft.'
+    dependsOn matrixTargets.collect { ":${it}:configureLaunch" }
+}
+
+tasks.register('verifyMatrix') {
+    group = 'verification'
+    description = 'Runs compilation, packaging, and dedicated-server launch setup for the complete matrix.'
+    dependsOn 'compileMatrix', 'packageMatrix', 'verifyServerLaunchSetup'
+}

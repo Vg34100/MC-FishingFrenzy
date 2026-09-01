@@ -31,10 +31,10 @@
 ## Magnet
 
 - **Name:** Magnet
-- **Luck Bonus:** -1
+- **Luck Bonus:** 5
 - **Multi-Catch Amount:** 1
 - **Multi-Catch Chance:** 0.05
-- **Loot Table:** Magnet Fishing Gameplay
+- **Loot Table:** Vanilla fishing (increased treasure odds)
 
 ## Challenge Bait
 

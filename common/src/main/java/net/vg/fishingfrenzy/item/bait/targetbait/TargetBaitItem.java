@@ -19,10 +19,10 @@ public class TargetBaitItem extends BaitItem implements TargetBaitProperties {
     }
 
     public static int getPrimaryColor(CompoundTag nbt) {
-        return nbt.contains("PrimaryColor") ? nbt.getInt("PrimaryColor") : 0xFFFFFF;
+        return nbt.getIntOr("PrimaryColor", 0xFFFFFF);
     }
 
     public static int getSecondaryColor(CompoundTag nbt) {
-        return nbt.contains("SecondaryColor") ? nbt.getInt("SecondaryColor") : 0xFFFFFF;
+        return nbt.getIntOr("SecondaryColor", 0xFFFFFF);
     }
 }

@@ -4,6 +4,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootTable;
+import java.util.function.Supplier;
 
 public class BaitPropertiesBuilder implements BaitProperties {
     private int lureBonus = 0;
@@ -12,7 +13,7 @@ public class BaitPropertiesBuilder implements BaitProperties {
     private int multiCatchAmount = 0;
     private float multiCatchChance = 0.0f;
     private ResourceKey<LootTable> lootTable = BuiltInLootTables.FISHING;
-    private Item targetedFish = null;
+    private Supplier<Item> targetedFishSupplier = () -> null;
 
 
     public BaitPropertiesBuilder setLureBonus(int lureBonus) {
@@ -46,7 +47,12 @@ public class BaitPropertiesBuilder implements BaitProperties {
     }
 
     public BaitPropertiesBuilder setTargetedFish(Item targetedFish) {
-        this.targetedFish = targetedFish;
+        this.targetedFishSupplier = () -> targetedFish;
+        return this;
+    }
+
+    public BaitPropertiesBuilder setTargetedFishSupplier(Supplier<Item> targetedFishSupplier) {
+        this.targetedFishSupplier = targetedFishSupplier;
         return this;
     }
 
@@ -84,5 +90,8 @@ public class BaitPropertiesBuilder implements BaitProperties {
     }
 
     @Override
-    public Item getTargetedFish() { return targetedFish; }
+    public Item getTargetedFish() { return targetedFishSupplier.get(); }
+
+    @Override
+    public Supplier<Item> getTargetedFishSupplier() { return targetedFishSupplier; }
 }

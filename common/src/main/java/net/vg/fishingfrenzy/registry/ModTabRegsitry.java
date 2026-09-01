@@ -22,16 +22,6 @@ public class ModTabRegsitry {
             () -> CreativeTabRegistry.create(builder -> {
                 builder.title(Component.translatable("category.fishing_frenzy_all"));
                 builder.icon(() -> new ItemStack(Items.FISHING_ROD));
-                builder.displayItems((parameters, output) -> {
-                    ModItems.FISHING_RODS.forEach(rod -> output.accept(rod.get()));
-                    ModItems.BAIT_ITEMS.forEach(bait -> output.accept(bait.get()));
-                    FishManager.getItemsByType(FishManager.ItemType.FISH).forEach(fish -> output.accept(fish.get()));
-                    FishManager.getItemsByType(FishManager.ItemType.COOKED_FISH).forEach(fish -> output.accept(fish.get()));
-
-                    FishManager.getItemsByType(FishManager.ItemType.BAIT).forEach(bait -> output.accept(bait.get()));
-
-
-                });
             })
     );
 
@@ -40,9 +30,6 @@ public class ModTabRegsitry {
             () -> CreativeTabRegistry.create(builder -> {
                 builder.title(Component.translatable("category.fishing_frenzy_fishes"));
                 builder.icon(() -> new ItemStack(Items.COD));
-                builder.displayItems((parameters, output) -> {
-                    FishManager.getItemsByType(FishManager.ItemType.FISH).forEach(fish -> output.accept(fish.get()));
-                });
             })
     );
 
@@ -51,11 +38,6 @@ public class ModTabRegsitry {
             () -> CreativeTabRegistry.create(builder -> {
                 builder.title(Component.translatable("category.fishing_frenzy_bait"));
                 builder.icon(() -> new ItemStack(Items.STICK));
-                builder.displayItems((parameters, output) -> {
-                    ModItems.BAIT_ITEMS.forEach(bait -> output.accept(bait.get()));
-                    FishManager.getItemsByType(FishManager.ItemType.BAIT).forEach(bait -> output.accept(bait.get()));
-
-                });
             })
     );
 
@@ -77,5 +59,28 @@ public class ModTabRegsitry {
 
     public static void register() {
         TABS.register();
+        appendAll(FISHING_FRENZY_GROUP, ModItems.FISHING_RODS);
+        appendAll(FISHING_FRENZY_GROUP, ModItems.BAIT_ITEMS);
+        appendAll(FISHING_FRENZY_GROUP, FishManager.getItemsByType(FishManager.ItemType.FISH));
+        appendAll(FISHING_FRENZY_GROUP, FishManager.getItemsByType(FishManager.ItemType.COOKED_FISH));
+        appendAll(FISHING_FRENZY_GROUP, FishManager.getItemsByType(FishManager.ItemType.BUCKET));
+        appendAll(FISHING_FRENZY_GROUP, FishManager.getItemsByType(FishManager.ItemType.SPAWN_EGG));
+        appendAll(FISHING_FRENZY_GROUP, FishManager.getItemsByType(FishManager.ItemType.BAIT));
+
+        appendAll(FISHES_GROUP, FishManager.getItemsByType(FishManager.ItemType.FISH));
+        appendAll(FISHES_GROUP, FishManager.getItemsByType(FishManager.ItemType.COOKED_FISH));
+        appendAll(FISHES_GROUP, FishManager.getItemsByType(FishManager.ItemType.BUCKET));
+
+        appendAll(BAIT_GROUP, ModItems.BAIT_ITEMS);
+        appendAll(BAIT_GROUP, FishManager.getItemsByType(FishManager.ItemType.BAIT));
+    }
+
+    private static <T extends net.minecraft.world.level.ItemLike> void appendAll(
+            RegistrySupplier<CreativeModeTab> tab,
+            Iterable<? extends RegistrySupplier<T>> items
+    ) {
+        for (RegistrySupplier<T> item : items) {
+            CreativeTabRegistry.append(tab, item);
+        }
     }
 }

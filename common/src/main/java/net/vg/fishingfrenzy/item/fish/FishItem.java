@@ -1,7 +1,7 @@
 package net.vg.fishingfrenzy.item.fish;
 
 import com.mojang.datafixers.util.Pair;
-import net.minecraft.advancements.critereon.MinMaxBounds;
+import net.minecraft.advancements.criterion.MinMaxBounds;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;

@@ -1,6 +1,5 @@
 package net.vg.fishingfrenzy.entity.goal;
 
-import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -13,7 +12,6 @@ import java.util.EnumSet;
 import java.util.List;
 
 public class BreedableSchoolFishMateGoal extends Goal {
-    private static final TargetingConditions VALID_MATE_PREDICATE = TargetingConditions.forNonCombat().range(8.0).ignoreLineOfSight();
     protected final BreedableSchoolingFishEntity fish;
     private final Class<? extends BreedableSchoolingFishEntity> entityClass;
     protected final Level level;
@@ -67,7 +65,7 @@ public class BreedableSchoolFishMateGoal extends Goal {
 
     @Nullable
     private BreedableSchoolingFishEntity findMate() {
-        List<? extends BreedableSchoolingFishEntity> list = this.level.getNearbyEntities(this.entityClass, VALID_MATE_PREDICATE, this.fish, this.fish.getBoundingBox().inflate(8.0));
+        List<? extends BreedableSchoolingFishEntity> list = this.level.getEntitiesOfClass(this.entityClass, this.fish.getBoundingBox().inflate(8.0), e -> e != this.fish);
         double d = Double.MAX_VALUE;
         BreedableSchoolingFishEntity closestMate = null;
 

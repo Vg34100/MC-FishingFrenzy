@@ -6,17 +6,18 @@ import net.minecraft.stats.Stats;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.AnimationState;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
-import net.minecraft.world.entity.animal.AbstractSchoolingFish;
+import net.minecraft.world.entity.animal.fish.AbstractSchoolingFish;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.Level;
 import net.vg.fishingfrenzy.entity.goal.BreedableSchoolFishMateGoal;
 import net.vg.fishingfrenzy.item.fish.FishRegistry;
@@ -38,12 +39,9 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
     private void registerCustomGoals() {
         this.goalSelector.addGoal(2, new TemptGoal(this, 1.250, arg -> arg.is(fishRegistry.getBreedingItem()), false));
         this.goalSelector.addGoal(1, new BreedableSchoolFishMateGoal(this, 1.0));
-//        this.goalSelector.add(3, new FollowGroupLeaderGoal(this));
         this.goalSelector.addGoal(4, new WaterAvoidingRandomStrollGoal(this, 1.0));
         this.goalSelector.addGoal(5, new LookAtPlayerGoal(this, Player.class, 4f));
         this.goalSelector.addGoal(6, new RandomLookAroundGoal(this));
-
-        // Always add attack goals, but only target players if shouldAttack is true
         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0, false));
 
         if (fishRegistry.shouldAttack()) {
@@ -61,12 +59,14 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
     }
 
     @Override
-    protected void dropFromLootTable(DamageSource damageSource, boolean bl) {
-        super.dropFromLootTable(damageSource, bl);
-        this.spawnAtLocation(fishRegistry.getFishRegistry().get());
+    protected void dropFromLootTable(ServerLevel serverLevel, DamageSource damageSource, boolean bl) {
+        super.dropFromLootTable(serverLevel, damageSource, bl);
+        this.spawnAtLocation(serverLevel, fishRegistry.getFishName().equals("cobblestone_fish")
+                ? Items.COBBLESTONE
+                : fishRegistry.getFishRegistry().get());
 
         for (Item item : fishRegistry.getAdditionalDrops()) {
-            this.spawnAtLocation(item);
+            this.spawnAtLocation(serverLevel, item);
         }
     }
 
@@ -78,7 +78,10 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
 
     @Override
     public ItemStack getBucketItemStack() {
-        return null;
+        if (fishRegistry != null && fishRegistry.getBucketItemRegistry() != null) {
+            return new ItemStack(fishRegistry.getBucketItemRegistry().get());
+        }
+        return new ItemStack(Items.WATER_BUCKET);
     }
 
     private void setupAnimationStates() {
@@ -93,7 +96,7 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
     @Override
     protected void updateWalkAnimation(float f) {
         float g = this.getPose() == Pose.SWIMMING ? Math.min(f * 6.0f, 1.0f) : 0.0f;
-        this.walkAnimation.update(f, 0.2f);
+        this.walkAnimation.update(f, 0.2f, 1.0f);
     }
 
     @Override
@@ -111,7 +114,7 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
 
     @Override
     public BreedableSchoolingFishEntity createChild(ServerLevel level, BreedableSchoolingFishEntity entity) {
-        CustomBreedableSchoolingFishEntity baby = (CustomBreedableSchoolingFishEntity) this.getType().create(level);
+        CustomBreedableSchoolingFishEntity baby = (CustomBreedableSchoolingFishEntity) this.getType().create(level, EntitySpawnReason.BREEDING);
         if (baby != null) {
             baby.setBaby(true);
         }
@@ -123,10 +126,11 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
         BreedableSchoolingFishEntity baby = this.createChild(level, other);
         if (baby != null) {
             baby.setBaby(true);
-            baby.moveTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
+            baby.snapTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
             this.breed(level, other, baby);
             level.addFreshEntityWithPassengers(baby);
-        }    }
+        }
+    }
 
     @Override
     public void breed(ServerLevel level, BreedableSchoolingFishEntity other, BreedableSchoolingFishEntity baby) {
@@ -139,8 +143,9 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
             this.resetLoveTicks();
             other.resetLoveTicks();
             this.level().broadcastEntityEvent(this, (byte)18);
-            if (level.getGameRules().getBoolean(GameRules.RULE_DOMOBLOOT)) {
+            if (level.getGameRules().get(GameRules.MOB_DROPS)) {
                 level.addFreshEntity(new ExperienceOrb(level, this.getX(), this.getY(), this.getZ(), RandomSource.create().nextInt(7) + 1));
             }
-        }    }
+        }
+    }
 }

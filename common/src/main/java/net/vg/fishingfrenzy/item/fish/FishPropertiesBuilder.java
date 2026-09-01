@@ -1,7 +1,7 @@
 package net.vg.fishingfrenzy.item.fish;
 
 import com.mojang.datafixers.util.Pair;
-import net.minecraft.advancements.critereon.MinMaxBounds;
+import net.minecraft.advancements.criterion.MinMaxBounds;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.effect.MobEffect;
@@ -46,6 +46,8 @@ public class FishPropertiesBuilder implements FishProperties {
     private List<StatusEffectEntry> cookedStatusEffects = new ArrayList<>();
 
     private boolean snack = false;
+    private boolean shouldCook = true;
+    private boolean shouldBucket = true;
 
     // Breeding Properties
     private Item breedingItem = Items.SEAGRASS;
@@ -57,6 +59,9 @@ public class FishPropertiesBuilder implements FishProperties {
     private List<Item> additionalDrops = List.of();
     private boolean shouldAttack = false;
     private float attackDamage = 1.0f;
+    private float entityWidth = 0.45f;
+    private float entityHeight = 0.30f;
+    private float shadowRadius = 0.20f;
 
 
     public FishPropertiesBuilder setWeight(int weight) {
@@ -81,6 +86,16 @@ public class FishPropertiesBuilder implements FishProperties {
 
     public FishPropertiesBuilder setMaxTime(int maxTime) {
         this.maxTime = maxTime;
+        return this;
+    }
+
+    public FishPropertiesBuilder setShouldCook(boolean shouldCook) {
+        this.shouldCook = shouldCook;
+        return this;
+    }
+
+    public FishPropertiesBuilder setShouldBucket(boolean shouldBucket) {
+        this.shouldBucket = shouldBucket;
         return this;
     }
 
@@ -193,6 +208,15 @@ public class FishPropertiesBuilder implements FishProperties {
         this.attackDamage = attackDamage;
         return this;
     }
+    public FishPropertiesBuilder setEntitySize(float width, float height) {
+        this.entityWidth = width;
+        this.entityHeight = height;
+        return this;
+    }
+    public FishPropertiesBuilder setShadowRadius(float shadowRadius) {
+        this.shadowRadius = shadowRadius;
+        return this;
+    }
     @Override
     public int getWeight() {
         return weight;
@@ -295,6 +319,16 @@ public class FishPropertiesBuilder implements FishProperties {
     }
 
     @Override
+    public boolean shouldCook() {
+        return shouldCook;
+    }
+
+    @Override
+    public boolean shouldBucket() {
+        return shouldBucket;
+    }
+
+    @Override
     public Item getBreedingItem() {
         return breedingItem;
     }
@@ -327,6 +361,18 @@ public class FishPropertiesBuilder implements FishProperties {
     @Override
     public float getAttackDamage() {
         return attackDamage;
+    }
+    @Override
+    public float getEntityWidth() {
+        return entityWidth;
+    }
+    @Override
+    public float getEntityHeight() {
+        return entityHeight;
+    }
+    @Override
+    public float getShadowRadius() {
+        return shadowRadius;
     }
 
 }

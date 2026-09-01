@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fishingfrenzy:item/albacore_bait",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -12348998
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -14061662
+      }
+    ]
+  }
+}

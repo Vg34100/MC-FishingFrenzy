@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "category": "food",
+  "cookingtime": 200,
+  "experience": 0.35,
+  "group": "tuna",
+  "ingredient": "fishingfrenzy:tuna",
+  "result": {
+    "id": "fishingfrenzy:cooked_tuna"
+  }
+}

@@ -4,6 +4,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootTable;
+import java.util.function.Supplier;
 
 public interface BaitProperties {
 
@@ -32,4 +33,8 @@ public interface BaitProperties {
     }
 
     default Item getTargetedFish() { return null; }
+
+    default Supplier<Item> getTargetedFishSupplier() {
+        return this::getTargetedFish;
+    }
 }

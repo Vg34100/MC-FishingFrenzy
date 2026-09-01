@@ -1,7 +1,7 @@
 package net.vg.fishingfrenzy.item.fish;
 
 import com.mojang.datafixers.util.Pair;
-import net.minecraft.advancements.critereon.MinMaxBounds;
+import net.minecraft.advancements.criterion.MinMaxBounds;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -83,6 +83,14 @@ public interface FishProperties {
         return false;
     }
 
+    default boolean shouldCook() {
+        return true;
+    }
+
+    default boolean shouldBucket() {
+        return true;
+    }
+
     // Breeding Properties
     default Item getBreedingItem() {
         return Items.SEAGRASS;
@@ -108,6 +116,13 @@ public interface FishProperties {
         return 1.0f;
     }
 
-    // Add a Target Goal List
-
+    default float getEntityWidth() {
+        return 0.45f;
+    }
+    default float getEntityHeight() {
+        return 0.30f;
+    }
+    default float getShadowRadius() {
+        return 0.20f;
+    }
 }

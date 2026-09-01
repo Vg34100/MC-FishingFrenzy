@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:fishing",
+  "pools": [
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "entries": [
+        {"type": "minecraft:loot_table", "value": "minecraft:gameplay/fishing/treasure", "weight": 80},
+        {"type": "minecraft:loot_table", "value": "minecraft:gameplay/fishing/junk", "weight": 19},
+        {"type": "minecraft:loot_table", "value": "minecraft:gameplay/fishing/fish", "weight": 1}
+      ]
+    }
+  ],
+  "random_sequence": "fishingfrenzy:gameplay/magnet_fishing"
+}

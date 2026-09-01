@@ -1,0 +1,421 @@
+# Converting an Architectury mod to a Stonecutter version matrix
+
+This is a practical recipe for taking a Minecraft mod that currently targets one
+Minecraft version (for example, 26.1.2) and maintaining it against multiple
+versions from one branch and one source tree. It was written from Fishing
+Frenzy's 26.1, 26.1.1, 26.1.2, and 26.2 Fabric/NeoForge migration.
+
+The aim is not to make every Minecraft version compile by hiding every API
+difference. The aim is to give each supported Minecraft/loader pair an explicit
+build target, pinned dependencies, isolated development run directory, and a
+runtime smoke test.
+
+## What this architecture provides
+
+The target names follow this shape:
+
+```text
+<minecraft-version>-fabric
+<minecraft-version>-neoforge
+```
+
+For Fishing Frenzy, the resulting matrix is:
+
+| Target | Minecraft | Loader | Runtime status |
+| --- | --- | --- | --- |
+| `26.1-fabric` | 26.1 | Fabric | verified through resource reload |
+| `26.1-neoforge` | 26.1 | NeoForge | verified through resource reload |
+| `26.1.1-fabric` | 26.1.1 | Fabric | verified through resource reload |
+| `26.1.1-neoforge` | 26.1.1 | NeoForge | verified through resource reload |
+| `26.1.2-fabric` | 26.1.2 | Fabric | verified through resource reload |
+| `26.1.2-neoforge` | 26.1.2 | NeoForge | verified through resource reload |
+| `26.2-fabric` | 26.2 | Fabric | verified through resource reload |
+| `26.2-neoforge` | 26.2 | NeoForge | verified through resource reload |
+
+Each target is a Gradle project visible in IntelliJ. Its `runClient` and
+`runServer` tasks are therefore selectable separately instead of requiring a
+branch checkout or a rewrite of root `gradle.properties`.
+
+The shared Java/resources stay canonical in the normal `common/`, `fabric/`,
+and `neoforge/` directories. Only a target that needs source-level API changes
+gets a generated compatibility source view.
+
+## Before changing the build
+
+1. Start from a working, single-version build for both loaders.
+2. Record the exact dependencies that successfully start each current loader.
+3. Save a clean baseline run log for Fabric and NeoForge.
+4. Keep existing code canonical for the oldest supported version unless a newer
+   API is clearly the more stable shared abstraction.
+5. Do not promise support from a compile result alone. Client mixins, metadata,
+   resource formats, and NeoForge's launch pipeline are runtime concerns.
+
+## Files to add
+
+```text
+settings.gradle
+stonecutter.gradle
+build.matrix.gradle
+gradle/matrix/<mc>-fabric.properties
+gradle/matrix/<mc>-neoforge.properties
+docs/development/testing.md
+```
+
+`settings.gradle` owns the target list. `stonecutter.gradle` owns aggregate
+tasks. `build.matrix.gradle` is the central build script applied to every
+generated target. The small property files make version pinning inspectable and
+avoid a large maze of `if (project.name == ...)` statements.
+
+## 1. Register Stonecutter targets
+
+Add the Stonecutter plugin repository and plugin to `settings.gradle`, then
+register every Minecraft/loader pair:
+
+```groovy
+pluginManagement {
+    repositories {
+        maven { url 'https://maven.kikugie.dev/releases' }
+        maven { url 'https://maven.fabricmc.net/' }
+        maven { url 'https://maven.architectury.dev/' }
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id 'dev.kikugie.stonecutter' version '0.9.7'
+}
+
+rootProject.name = 'examplemod'
+
+stonecutter {
+    centralScript = 'build.matrix.gradle'
+    kotlinController = false // only when retaining Groovy build scripts
+
+    create(rootProject) {
+        version('26.1-fabric', '26.1')
+        version('26.1-neoforge', '26.1')
+        version('26.1.1-fabric', '26.1.1')
+        version('26.1.1-neoforge', '26.1.1')
+        version('26.1.2-fabric', '26.1.2')
+        version('26.1.2-neoforge', '26.1.2')
+        version('26.2-fabric', '26.2')
+        version('26.2-neoforge', '26.2')
+    }
+}
+```
+
+Do not leave the old `include 'common'`, `include 'fabric'`, and `include
+'neoforge'` setup active alongside this design. Stonecutter's targets are the
+new build projects; the original directories become source/resource inputs to
+the central script.
+
+### Critical NeoForge setting: make it early
+
+Loom chooses its platform while a project is being configured. A NeoForge node
+must have `loom.platform=neoforge` *before* Loom is applied. If it is supplied
+too late, the target can compile yet create a Fabric/Knot launch classpath.
+
+Set a project property from `settings.gradle` before each generated project is
+evaluated:
+
+```groovy
+gradle.beforeProject { project ->
+    if (project.name.endsWith('-neoforge')) {
+        project.extensions.extraProperties.set('loom.platform', 'neoforge')
+    }
+}
+```
+
+Symptoms of missing this setting include `KnotClient` appearing in a NeoForge
+launch command, a `ClassNotFoundException` for `net.neoforged.fml.startup.Client`,
+or FML discovering an unmodified generic Minecraft jar rather than
+`forge-universal.jar` and a `neoforge-...-minecraft-merged-deobf` jar.
+
+## 2. Put one dependency set in each target file
+
+Example Fabric target (`gradle/matrix/26.2-fabric.properties`):
+
+```properties
+minecraft_version=26.2
+loader=fabric
+architectury_api_version=21.0.7
+fabric_loader_version=0.19.4
+fabric_api_version=0.156.0+26.2
+modmenu_version=20.0.1
+mixinextras_version=0.5.5
+```
+
+Example NeoForge target:
+
+```properties
+minecraft_version=26.2
+loader=neoforge
+architectury_api_version=21.0.7
+neoforge_version=26.2.0.62
+mixinextras_version=0.5.5
+```
+
+Pin every client-only development dependency too. A compatible mod can still
+crash at the title screen if a development helper targets an older Minecraft
+API. Fishing Frenzy's 26.2 Fabric client needed Mod Menu 20.0.1; the older
+18.0.0-beta.1 called a removed `I18n.exists(String)` method at runtime.
+
+Avoid copying Fishing Frenzy's version numbers into another mod. Resolve and
+test that mod's own Fabric API, Architectury, NeoForge, mixin, and optional
+client-mod compatibility.
+
+## 3. Build the target project correctly
+
+The central script should:
+
+1. Read `gradle/matrix/${project.name}.properties`.
+2. Derive `isFabric` / `isNeoForge` from `loader`.
+3. Set the Architectury Minecraft version for the generated node.
+4. Select the Architectury loader transform.
+5. Set Loom's native NeoForge platform for NeoForge nodes.
+6. Add the universal `minecraft` dependency plus that target's loader/runtime
+   dependencies.
+7. Point the source set at the canonical source/resource directories.
+8. Give every run task an isolated `runs/<target>/<run-task>` directory.
+
+The essential platform setup is:
+
+```groovy
+architectury {
+    minecraft = matrixValue('minecraft_version')
+    platformSetupLoomIde()
+    if (isFabric) fabric() else neoForge()
+}
+
+if (isNeoForge) {
+    loom {
+        neoForge { }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraft:minecraft:${matrixValue('minecraft_version')}"
+    if (isFabric) {
+        implementation "net.fabricmc:fabric-loader:${matrixValue('fabric_loader_version')}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${matrixValue('fabric_api_version')}"
+        implementation "dev.architectury:architectury-fabric:${matrixValue('architectury_api_version')}"
+    } else {
+        neoForge "net.neoforged:neoforge:${matrixValue('neoforge_version')}"
+        implementation "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
+    }
+}
+```
+
+`architectury.neoForge()` and `loom.neoForge {}` are both needed in this
+standalone-target arrangement. The first configures Architectury's transform;
+the second tells Loom to create NeoForge's patched Minecraft/FML launch
+pipeline. Treat them as distinct responsibilities.
+
+For the generated target to resemble Architectury's normal NeoForge module,
+preserve the usual `common`, classpath, and `developmentNeoForge` configuration
+relationships when the original project needs them:
+
+```groovy
+if (isNeoForge) {
+    configurations {
+        common {
+            canBeResolved = true
+            canBeConsumed = false
+        }
+        compileClasspath.extendsFrom common
+        runtimeClasspath.extendsFrom common
+        developmentNeoForge.extendsFrom common
+    }
+}
+```
+
+## 4. Keep run directories isolated
+
+Never share a run directory between version targets. Saves, configs, generated
+server properties, logs, and a loader's cached state can contaminate another
+target.
+
+```groovy
+loom {
+    runs {
+        configureEach {
+            runDir = rootProject.file("runs/${project.name}/${name}")
+        }
+    }
+}
+```
+
+This gives predictable paths such as:
+
+```text
+runs/26.2-fabric/client
+runs/26.2-neoforge/client
+runs/26.2-fabric/server
+runs/26.2-neoforge/server
+```
+
+## 5. Make metadata version-aware
+
+Do not hard-code the oldest Minecraft version in loader metadata. It will make a
+perfectly compiled target fail loader resolution before mod initialization.
+
+For Fabric, replace the Minecraft requirement in `fabric.mod.json` with:
+
+```json
+"minecraft": "${minecraft_version}"
+```
+
+Then expand it from `processResources`:
+
+```groovy
+filesMatching('fabric.mod.json') {
+    expand version: project.version, minecraft_version: matrixValue('minecraft_version')
+}
+```
+
+Do the same for NeoForge metadata if its Minecraft, NeoForge, or Architectury
+range varies by target. Verify the processed resource, not only the source file.
+
+## 6. Handle source compatibility deliberately
+
+First compile the newest target unchanged. Read the small set of real API
+errors, inspect the corresponding vanilla/loader sources, and choose one of
+these mechanisms:
+
+| Situation | Recommended mechanism |
+| --- | --- |
+| Same behavior, a few mechanical renamed symbols | Generate a target source view with narrow replacements. |
+| New and old APIs need materially different logic | Split an implementation behind a shared interface or add version-specific source files. |
+| Behavior is loader-specific | Keep it in Fabric/NeoForge source, not shared/common code. |
+| Resource schema changed | Use target-specific resource processing or data generation. |
+
+Fishing Frenzy's 26.2 view is generated into `build/matrix-sources/` from the
+canonical 26.1.2 source. It replaces only verified, version-specific API moves
+and method renames. This is appropriate for a handful of deterministic changes;
+it is not a general text-replacement strategy. Do not use it for behavior
+differences or broad identifier substitutions.
+
+Generated source views must be declared as task inputs and compilation must
+depend on their generation task. Otherwise IntelliJ/Gradle can compile stale
+files and hide a source compatibility failure.
+
+## 7. Add aggregate verification tasks
+
+Keep the list of supported targets in one place. Then expose tasks that an IDE,
+CI job, or agent can invoke without remembering every target:
+
+```groovy
+def matrixTargets = [
+    '26.1-fabric', '26.1-neoforge',
+    '26.1.1-fabric', '26.1.1-neoforge',
+    '26.1.2-fabric', '26.1.2-neoforge',
+    '26.2-fabric', '26.2-neoforge'
+]
+
+tasks.register('compileMatrix') {
+    dependsOn matrixTargets.collect { ":${it}:compileJava" }
+}
+
+tasks.register('packageMatrix') {
+    dependsOn matrixTargets.collect { ":${it}:jar" }
+}
+
+tasks.register('verifyServerLaunchSetup') {
+    dependsOn matrixTargets.collect { ":${it}:configureLaunch" }
+}
+
+tasks.register('verifyMatrix') {
+    dependsOn 'compileMatrix', 'packageMatrix', 'verifyServerLaunchSetup'
+}
+```
+
+`configureLaunch` validates that Loom can assemble a dedicated-server launch
+configuration. It does **not** start Minecraft. Retain normal dedicated-server
+runtime smoke tests before releases or server-sensitive changes.
+
+## Required verification ladder
+
+Use this order for every newly added target:
+
+1. `compileJava` — catches source/API issues.
+2. `jar` — catches resource processing and metadata expansion issues.
+3. `configureLaunch` — catches basic development launch wiring.
+4. `runClient` — wait past initial resource reload to a stable title screen.
+5. `runServer` — for releases or server-sensitive changes, reach the ready log
+   line and stop cleanly.
+6. Connect a matching development client to the matching server when networking,
+   entities, registries, loot, or gameplay behavior changed.
+
+Steps 1–3 are necessary automation. They are not proof the target works.
+
+For every temporary client/server started by an agent, record its exact process
+and stop it after the smoke test. Never leave `runServer` bound to port 25565;
+it will make the next loader appear broken.
+
+## Runtime failure triage
+
+| Runtime symptom | Likely cause | First place to check |
+| --- | --- | --- |
+| Loader says mod requires the old Minecraft version | Hard-coded Fabric/NeoForge metadata | Processed `fabric.mod.json` / `neoforge.mods.toml` |
+| Fabric title-screen `NoSuchMethodError` from Mod Menu or another helper | Optional client dependency targets the old game API | Target's dependency property file |
+| `Mixin transformation ... failed` after a version jump | MixinExtras, mappings, or injector target mismatch | Target dependency versions and the exact mixin target |
+| NeoForge starts `KnotClient` | `loom.platform=neoforge` was missing before plugin application | `settings.gradle` early project property |
+| NeoForge cannot find FML Client/Server class | Generic Fabric-style launch path rather than NeoForge pipeline | Same platform configuration; inspect generated launch command |
+| FML finds generic Minecraft instead of patched game jars | Loom did not use its Forge-like userdev pipeline | `loom { neoForge {} }`, `neoForge` dependency, generated arg file |
+| `Address already in use` during server test | Previous run server still owns port 25565 | Stop the exact prior process; do not alter mod code |
+
+## Adding another Minecraft version later
+
+Do **not** add all targets at once and guess their dependencies. Use this
+controlled expansion:
+
+1. Create the Fabric property file with known published dependencies.
+2. Register only `<version>-fabric` and compile it.
+3. Add the NeoForge property file and target only after resolving its matching
+   NeoForge/FML versions.
+4. Compile both loaders.
+5. Add a source/resource compatibility view only for demonstrated differences.
+6. Run each client's title-screen smoke test.
+7. Add the targets to aggregate task lists and CI only after the smoke tests
+   pass.
+
+This keeps a bad dependency coordinate or an API regression localized to one
+new target instead of destabilizing the established matrix.
+
+### A real compatibility boundary: early NeoForge 26.1.x
+
+Fishing Frenzy's `26.1-neoforge` and `26.1.1-neoforge` projects demonstrate
+why compile success is not a support claim. Their published NeoForge releases
+provide `net.neoforged.neoforge.event.level.BlockEvent.BreakEvent`, while
+Architectury 20.0.4 was compiled against the later renamed
+`net.neoforged.neoforge.event.level.block.BreakBlockEvent`. The result is a
+startup `NoClassDefFoundError` inside Architectury, despite a successful mod
+compile.
+
+The matrix handles this narrowly in `build.matrix.gradle`: for those two
+targets only, it extracts Architectury's single affected event-handler source,
+changes that event type to the real early-NeoForge equivalent, compiles it
+against the target classpath, and replaces that handler's classes in a local
+development copy of the Architectury jar. Event delivery remains real; the
+build never introduces a fake `net.neoforged.*` class and gameplay code does
+not need a loader-specific workaround.
+
+This is an adapter for a demonstrated binary-name mismatch, not a general
+solution for library incompatibility. Keep it small, keep it target-local, and
+rerun the title-screen smoke test whenever Architectury or NeoForge changes.
+
+## What belongs in project documentation versus an agent guide
+
+Keep this migration guide in `docs/development/` because it explains the
+project's build architecture and gives future maintainers inspectable examples.
+Keep the short, enforceable rules in `AGENTS.md`:
+
+- compile all targets through the smart wrapper;
+- do not call a target supported from compilation alone;
+- use distinct run directories;
+- smoke-test `runClient` through resource reload;
+- smoke-test dedicated servers for release/server changes;
+- stop every temporary test process.
+
+That division gives both humans and future agent sessions a short operational
+checklist plus a detailed reference when the build needs to change.
