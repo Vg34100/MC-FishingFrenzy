@@ -392,13 +392,14 @@ Architectury 20.0.4 was compiled against the later renamed
 startup `NoClassDefFoundError` inside Architectury, despite a successful mod
 compile.
 
-The matrix handles this narrowly in `build.matrix.gradle`: for those two
-targets only, it extracts Architectury's single affected event-handler source,
-changes that event type to the real early-NeoForge equivalent, compiles it
-against the target classpath, and replaces that handler's classes in a local
-development copy of the Architectury jar. Event delivery remains real; the
-build never introduces a fake `net.neoforged.*` class and gameplay code does
-not need a loader-specific workaround.
+Fishing Frenzy handles this narrowly with a NeoForge-only Mixin configuration.
+Its configuration plugin rewrites the affected Architectury handler's obsolete
+type descriptors to the real early-NeoForge `BlockEvent.BreakEvent` type before
+the JVM links the class. The transform is conditional: it does nothing when
+the installed Architectury class already uses the newer API. Event delivery
+remains real, Architectury stays the user's ordinary dependency, and the build
+does not introduce a fake `net.neoforged.*` class. This exact setup was
+validated in a production Prism instance with official Architectury 20.0.4.
 
 This is an adapter for a demonstrated binary-name mismatch, not a general
 solution for library incompatibility. Keep it small, keep it target-local, and

@@ -26,12 +26,6 @@ def isNeoForge = loader == 'neoforge'
 if (!isFabric && !isNeoForge) {
     throw new GradleException("Unsupported matrix loader '${loader}' for ${project.path}")
 }
-// NeoForge 26.1 and 26.1.1 still publish BlockEvent.BreakEvent, while
-// Architectury 20.x was compiled against its later renamed BreakBlockEvent.
-// Build a bytecode-compatible Architectury jar for those two development
-// targets rather than shipping a fake NeoForge class or changing gameplay code.
-def isEarlyNeoForge = isNeoForge && ['26.1', '26.1.1'].contains(matrixValue('minecraft_version'))
-
 group = rootProject.maven_group
 version = rootProject.mod_version
 
@@ -64,59 +58,6 @@ if (isNeoForge) {
     loom {
         neoForge { }
     }
-}
-
-if (isEarlyNeoForge) {
-    configurations {
-        earlyArchitecturyOriginal { canBeResolved = true; canBeConsumed = false }
-        earlyArchitecturySources { canBeResolved = true; canBeConsumed = false }
-    }
-
-    def compatibilitySourceDir = layout.buildDirectory.dir('early-architectury-source')
-    def compatibilityClassesDir = layout.buildDirectory.dir('early-architectury-classes')
-
-    def prepareEarlyArchitecturySource = tasks.register('prepareEarlyArchitecturySource', Sync) {
-        from { zipTree(configurations.earlyArchitecturySources.singleFile) }
-        include 'dev/architectury/event/forge/EventHandlerImplCommon.java'
-        into compatibilitySourceDir
-        filteringCharset = 'UTF-8'
-        filter { line ->
-            line.replace('net.neoforged.neoforge.event.level.block.BreakBlockEvent',
-                    'net.neoforged.neoforge.event.level.BlockEvent.BreakEvent')
-                .replace('event(BreakBlockEvent event)', 'event(BreakEvent event)')
-        }
-    }
-    def compileEarlyArchitecturyCompatibility = tasks.register('compileEarlyArchitecturyCompatibility', JavaCompile) {
-        dependsOn prepareEarlyArchitecturySource
-        source compatibilitySourceDir
-        // Do not use main.compileClasspath here: it includes the patched jar
-        // produced below and would make this helper task depend on itself.
-        classpath = files {
-            configurations.compileClasspath.files.findAll {
-                !it.name.equals('architectury-neoforge-compat.jar')
-            }
-        }
-        destinationDirectory = compatibilityClassesDir
-        options.release = 25
-    }
-    def patchEarlyArchitectury = tasks.register('patchEarlyArchitectury', Zip) {
-        dependsOn compileEarlyArchitecturyCompatibility
-        from({ zipTree(configurations.earlyArchitecturyOriginal.singleFile) }) {
-            exclude 'dev/architectury/event/forge/EventHandlerImplCommon*.class'
-        }
-        from compatibilityClassesDir
-        archiveFileName = 'architectury-neoforge-compat.jar'
-        destinationDirectory = layout.buildDirectory.dir('early-architectury')
-    }
-    tasks.withType(JavaCompile).configureEach {
-        if (name != 'compileEarlyArchitecturyCompatibility') {
-            dependsOn patchEarlyArchitectury
-        }
-    }
-    tasks.matching { it.name in ['processResources', 'configureLaunch', 'configureClientLaunch'] }.configureEach {
-        dependsOn patchEarlyArchitectury
-    }
-    ext.earlyPatchedArchitectury = patchEarlyArchitectury.flatMap { it.archiveFile }
 }
 
 // Mirror the configuration shape Architectury's normal NeoForge module uses.  The
@@ -207,14 +148,7 @@ dependencies {
         }
     } else {
         neoForge "net.neoforged:neoforge:${matrixValue('neoforge_version')}"
-        if (isEarlyNeoForge) {
-            earlyArchitecturyOriginal "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
-            earlyArchitecturySources "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}:sources"
-            compileOnly "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
-            implementation files(earlyPatchedArchitectury)
-        } else {
-            implementation "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
-        }
+        implementation "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
         if (matrix.getProperty('mixinextras_version') != null) {
             implementation "io.github.llamalad7:mixinextras-neoforge:${matrixValue('mixinextras_version')}"
         }

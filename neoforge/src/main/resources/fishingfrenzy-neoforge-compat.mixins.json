@@ -1,0 +1,10 @@
+{
+  "required": true,
+  "package": "net.vg.fishingfrenzy.neoforge.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "minVersion": "0.8",
+  "plugin": "net.vg.fishingfrenzy.neoforge.mixin.EarlyNeoForgeArchitecturyCompatPlugin",
+  "mixins": [
+    "EarlyNeoForgeArchitecturyCompatMixin"
+  ]
+}
