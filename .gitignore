@@ -2,6 +2,7 @@
 
 .gradle/
 .gradle-matrix/
+.env
 build/
 out/
 classes/
