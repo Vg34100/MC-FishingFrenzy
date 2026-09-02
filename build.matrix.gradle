@@ -1,8 +1,9 @@
 import java.util.Properties
 
 plugins {
-    id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT'
-    id 'architectury-plugin' version '3.5-SNAPSHOT'
+    id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT' apply false
+    id 'dev.architectury.loom' version '1.6-SNAPSHOT' apply false
+    id 'architectury-plugin' version '3.5-SNAPSHOT' apply false
 }
 
 def matrixPropertiesFile = rootProject.file("gradle/matrix/${project.name}.properties")
@@ -21,6 +22,8 @@ def matrixValue = { String key ->
 }
 
 def loader = matrixValue('loader')
+def javaVersion = matrix.getProperty('java_version', '25') as int
+def usesLegacyLoom = matrix.getProperty('loom_generation', 'current') == 'legacy'
 def isFabric = loader == 'fabric'
 def isNeoForge = loader == 'neoforge'
 if (!isFabric && !isNeoForge) {
@@ -28,6 +31,9 @@ if (!isFabric && !isNeoForge) {
 }
 group = rootProject.maven_group
 version = rootProject.mod_version
+
+apply plugin: usesLegacyLoom ? 'dev.architectury.loom' : 'dev.architectury.loom-no-remap'
+apply plugin: 'architectury-plugin'
 
 base {
     archivesName = "${rootProject.archives_name}-${loader}-${matrixValue('minecraft_version')}"
@@ -48,6 +54,12 @@ architectury {
         fabric()
     } else {
         neoForge()
+    }
+}
+
+if (usesLegacyLoom) {
+    loom {
+        silentMojangMappingsLicense()
     }
 }
 
@@ -138,6 +150,9 @@ dependencies {
     // Loom requires a declared Minecraft game dependency for every generated node. Its
     // NeoForge platform wiring replaces this with the matching merged runtime at launch.
     minecraft "net.minecraft:minecraft:${matrixValue('minecraft_version')}"
+    if (usesLegacyLoom) {
+        mappings loom.officialMojangMappings()
+    }
     if (isFabric) {
         implementation "net.fabricmc:fabric-loader:${matrixValue('fabric_loader_version')}"
         implementation "net.fabricmc.fabric-api:fabric-api:${matrixValue('fabric_api_version')}"
@@ -158,21 +173,26 @@ dependencies {
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.toVersion(javaVersion)
+    targetCompatibility = JavaVersion.toVersion(javaVersion)
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 25
+    options.release = javaVersion
 }
 
 processResources {
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', matrixValue('minecraft_version')
     inputs.property 'architectury_api_version', matrixValue('architectury_api_version')
+    inputs.property 'java_version', javaVersion
     if (isFabric) {
         filesMatching('fabric.mod.json') {
-            expand version: project.version, minecraft_version: matrixValue('minecraft_version')
+            expand version: project.version,
+                    minecraft_version: matrixValue('minecraft_version'),
+                    fabric_loader_version: matrixValue('fabric_loader_version'),
+                    architectury_api_version: matrixValue('architectury_api_version'),
+                    java_version: javaVersion
         }
     } else {
         inputs.property 'neoforge_version', matrixValue('neoforge_version')
@@ -182,6 +202,10 @@ processResources {
                     neoforge_version: matrixValue('neoforge_version'),
                     architectury_api_version: matrixValue('architectury_api_version')
         }
+    }
+
+    filesMatching('*.mixins.json') {
+        expand java_version: javaVersion
     }
 }
 
