@@ -223,7 +223,11 @@ if (usesLegacyLoom) {
                     def modsToml = new File(resourceRoot, 'META-INF/neoforge.mods.toml')
                     if (modsToml.isFile()) {
                         modsToml.setText(
-                                modsToml.getText('UTF-8').replaceAll(/(?m)^\[\[mixins]]\Rconfig = "fishingfrenzy-neoforge-compat\.mixins\.json"\R?/, ''),
+                                modsToml.getText('UTF-8')
+                                        .replaceAll(/(?m)^\[\[mixins]]\Rconfig = "fishingfrenzy-neoforge-compat\.mixins\.json"\R?/, '')
+                                        // iconFile replaced logoFile in NeoForge 26.2;
+                                        // legacy FML still reads the older key.
+                                        .replace('iconFile = "icon.png"', 'logoFile = "icon.png"'),
                                 'UTF-8'
                         )
                     }
@@ -261,6 +265,75 @@ if (usesLegacyLoom) {
                         source = source.replace(
                                 '@EventBusSubscriber(modid = Constants.MOD_ID, value = Dist.CLIENT)',
                                 '@EventBusSubscriber(modid = Constants.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)'
+                        )
+                        // Before 26.1 item tint data lived in the client item
+                        // color registry.  The canonical items/ JSON tint data
+                        // is deliberately removed for legacy resources, so
+                        // register the equivalent colors on NeoForge's MOD bus.
+                        source = source.replace(
+                                'import net.neoforged.neoforge.client.event.EntityRenderersEvent;',
+                                '''import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
+import net.minecraft.world.item.Item;
+import net.vg.fishingfrenzy.item.bait.targetbait.TargetBaitItem;
+import net.vg.fishingfrenzy.item.fish.FishManager;'''
+                        )
+                        source = source.replace(
+                                '\n}',
+                                '''
+
+    @SubscribeEvent
+    public static void registerLegacyItemColors(RegisterColorHandlersEvent.Item event) {
+        Item[] targetedBaits = FishManager.getItemsByType(FishManager.ItemType.BAIT).stream()
+                .map(supplier -> supplier.get())
+                .toArray(Item[]::new);
+        event.register((stack, tintIndex) -> stack.getItem() instanceof TargetBaitItem bait
+                ? bait.getColor(tintIndex) : 0xFFFFFF, targetedBaits);
+
+        Item[] spawnEggs = FishManager.getItemsByType(FishManager.ItemType.SPAWN_EGG).stream()
+                .map(supplier -> supplier.get())
+                .toArray(Item[]::new);
+        // Fish-textured eggs must not inherit SpawnEggItem's egg-shell tint.
+        event.register((stack, tintIndex) -> 0xFFFFFF, spawnEggs);
+    }
+}'''
+                        )
+                    }
+
+                    if (sourceFile.name == 'FishingFrenzyFabricClient.java') {
+                        // See the matching legacy NeoForge registration above.
+                        // Fabric requires this at client initialization rather
+                        // than through a MOD-bus event.
+                        source = source.replace(
+                                'import net.fabricmc.api.ClientModInitializer;',
+                                '''import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
+import net.minecraft.world.item.Item;
+import net.vg.fishingfrenzy.item.bait.targetbait.TargetBaitItem;
+import net.vg.fishingfrenzy.item.fish.FishManager;'''
+                        )
+                        source = source.replace(
+                                'ModClientEvents.registerClient();',
+                                '''ModClientEvents.registerClient();
+        registerLegacyItemColors();'''
+                        )
+                        source = source.replace(
+                                '\n}',
+                                '''
+
+    private static void registerLegacyItemColors() {
+        Item[] targetedBaits = FishManager.getItemsByType(FishManager.ItemType.BAIT).stream()
+                .map(supplier -> supplier.get())
+                .toArray(Item[]::new);
+        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> stack.getItem() instanceof TargetBaitItem bait
+                ? bait.getColor(tintIndex) : 0xFFFFFF, targetedBaits);
+
+        Item[] spawnEggs = FishManager.getItemsByType(FishManager.ItemType.SPAWN_EGG).stream()
+                .map(supplier -> supplier.get())
+                .toArray(Item[]::new);
+        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> 0xFFFFFF, spawnEggs);
+    }
+}'''
                         )
                     }
 

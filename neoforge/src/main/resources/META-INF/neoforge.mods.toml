@@ -11,7 +11,8 @@ authors = "Vg34100"
 description = '''
 A fishing expansion mod adding a wide variety of new fish, baits, and fishing mechanics.
 '''
-logoFile = "icon.png"
+# NeoForge 26.2 deprecated logoFile. This is a square icon asset.
+iconFile = "icon.png"
 
 [[dependencies.fishingfrenzy]]
 modId = "neoforge"

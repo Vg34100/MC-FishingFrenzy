@@ -347,8 +347,10 @@ been inspected and tested. Fishing Frenzy's legacy generator accounts for:
 | Entity/render-state API did not exist | Generate the older entity-model and renderer method shapes. |
 | Entity builder registration and attributes differ | Generate only the established 1.21 builder/attribute calls. |
 | 26.x item definitions and ingredient strings | Remove `assets/<modid>/items/` definitions; convert recipe ingredients back to `{ "item": ... }` / `{ "tag": ... }`; restore the old rod-model override. |
+| 26.x item-definition tint data | Register legacy Fabric/NeoForge item colors for every targeted bait; override fish-textured spawn eggs to white so `SpawnEggItem` does not tint the fish artwork. |
 | NeoForge client renderer events | Add `EventBusSubscriber.Bus.MOD` only in the legacy NeoForge generated source. |
 | NeoForge-only current compatibility mixin | Remove its declaration and file when it addresses a 26.x API rename that is absent in 1.21. |
+| NeoForge 26.2 metadata | Use `iconFile` in canonical metadata and generate the old `logoFile` key for legacy targets. |
 
 Do not use broad global replacements for a backport. Each replacement must be
 scoped to one source/resource, explain the old API, and be covered by a legacy

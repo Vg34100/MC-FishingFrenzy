@@ -353,6 +353,11 @@ smoke test above before a release.
 - Legacy resources and sources are generated under that target's `build/matrix-*` directories;
   change canonical `common/`, `fabric/`, or `neoforge/` inputs and the narrow generator rules,
   never generated output.
+- Item-definition tint data is 26.x-only. If a legacy item needs dynamic color, register it through
+  Fabric's item color registry and NeoForge's legacy `RegisterColorHandlersEvent.Item`; fish-textured
+  spawn eggs must override vanilla egg tinting with white.
+- Canonical NeoForge 26.2 metadata uses `iconFile`; generate `logoFile` only for legacy NeoForge
+  resources, rather than leaving a deprecated key in current releases.
 - A backward port must have both client and dedicated-server runtime smoke tests. Compilation is
   particularly weak evidence across the 26.x-to-1.21 API/resource boundary.
 - Read `docs/development/stonecutter-multiversion-migration.md` before adding another legacy target.
