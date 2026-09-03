@@ -70,38 +70,32 @@ if (usesLegacyLoom) {
     }
 
     // 1.21's Fabric/Mixin toolchain cannot parse Java 25 classes at launch.
-    // Contributors can point this at any Java 21 home; Prism's managed runtime
-    // is a useful local fallback on Windows without affecting 26.x tasks.
-    def legacyJavaHome = System.getenv('FISHING_FRENZY_JAVA21_HOME')
-    def prismJavaHome = new File(System.getProperty('user.home'), 'AppData/Roaming/PrismLauncher/java/java-runtime-delta')
-    def selectedLegacyJavaHome = legacyJavaHome ? new File(legacyJavaHome) : prismJavaHome
-    def legacyJavaExecutable = new File(selectedLegacyJavaHome, 'bin/java.exe')
-    if (legacyJavaExecutable.isFile()) {
-        project.ext.legacyJavaExecutable = legacyJavaExecutable.absolutePath
+    // Use Gradle's toolchain API rather than JavaExec#executable: Loom also
+    // configures javaLauncher, and setting both produces an IntelliJ-only
+    // failure even when the command-line task works.
+    def legacyJavaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(javaVersion)
+    }
+    project.ext.legacyJavaLauncher = legacyJavaLauncher
 
-        // Keep the selected runtime visible in Gradle/IDE output.  This catches
-        // accidental Java-25 launches before old Fabric's bundled Mixin reports
-        // the much less helpful "Unsupported class file major version" error.
-        tasks.register('verifyLegacyRuntime') {
-            group = 'verification'
-            description = 'Reports the Java executable selected for legacy game launch tasks.'
-            doLast {
-                def runTasks = tasks.withType(JavaExec).findAll {
-                    it.name.equalsIgnoreCase('runClient') || it.name.equalsIgnoreCase('runServer')
-                }
-                if (runTasks.empty) {
-                    throw new GradleException("No JavaExec run tasks found for ${project.path}")
-                }
-                runTasks.each { runTask ->
-                    logger.lifecycle("${project.path}:${runTask.name} uses ${runTask.executable}")
-                    if (runTask.executable != legacyJavaExecutable.absolutePath) {
-                        throw new GradleException("${runTask.path} is not configured for Java ${javaVersion}")
-                    }
+    tasks.register('verifyLegacyRuntime') {
+        group = 'verification'
+        description = 'Verifies that legacy game launch tasks use the Java 21 toolchain.'
+        doLast {
+            def runTasks = tasks.withType(JavaExec).findAll {
+                it.name.equalsIgnoreCase('runClient') || it.name.equalsIgnoreCase('runServer')
+            }
+            if (runTasks.empty) {
+                throw new GradleException("No JavaExec run tasks found for ${project.path}")
+            }
+            runTasks.each { runTask ->
+                def launcher = runTask.javaLauncher.orNull
+                logger.lifecycle("${runTask.path} uses ${launcher?.metadata?.installationPath}")
+                if (launcher == null || launcher.metadata.languageVersion.asInt() != javaVersion) {
+                    throw new GradleException("${runTask.path} is not configured for Java ${javaVersion}")
                 }
             }
         }
-    } else {
-        logger.warn("Legacy target ${project.path} needs Java 21 for runtime tests; set FISHING_FRENZY_JAVA21_HOME.")
     }
 }
 
@@ -650,16 +644,16 @@ loom {
     }
 }
 
-// Loom selects its Java launcher while it creates the run tasks.  Apply the
-// legacy executable after all projects have been evaluated so that Loom cannot
-// subsequently replace it with Gradle's Java 25 daemon launcher.
-if (usesLegacyLoom && project.ext.has('legacyJavaExecutable')) {
-    def legacyRuntimeExecutable = project.ext.legacyJavaExecutable
+// Loom creates the run tasks after the project is configured.  Apply the
+// compatible launcher afterward, while retaining a single source of truth for
+// both Gradle and IntelliJ.
+if (usesLegacyLoom && project.ext.has('legacyJavaLauncher')) {
+    def legacyRuntimeLauncher = project.ext.legacyJavaLauncher
     gradle.projectsEvaluated {
         tasks.withType(JavaExec).configureEach {
-            executable = legacyRuntimeExecutable
+            javaLauncher.set(legacyRuntimeLauncher)
             doFirst {
-                logger.lifecycle("${path} launching with ${executable}")
+                logger.lifecycle("${path} launching with ${javaLauncher.get().metadata.installationPath}")
             }
         }
     }

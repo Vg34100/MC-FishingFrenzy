@@ -3,7 +3,8 @@
 This is a practical recipe for taking a Minecraft mod that currently targets one
 Minecraft version (for example, 26.1.2) and maintaining it against multiple
 versions from one branch and one source tree. It was written from Fishing
-Frenzy's 26.1, 26.1.1, 26.1.2, and 26.2 Fabric/NeoForge migration.
+Frenzy's forward 26.x migration and its later backward port to 1.21 and
+1.21.1 on Fabric and NeoForge.
 
 The aim is not to make every Minecraft version compile by hiding every API
 difference. The aim is to give each supported Minecraft/loader pair an explicit
@@ -23,6 +24,10 @@ For Fishing Frenzy, the resulting matrix is:
 
 | Target | Minecraft | Loader | Runtime status |
 | --- | --- | --- | --- |
+| `1.21-fabric` | 1.21 | Fabric | client and dedicated server verified |
+| `1.21-neoforge` | 1.21 | NeoForge | client and dedicated server verified |
+| `1.21.1-fabric` | 1.21.1 | Fabric | client and dedicated server verified |
+| `1.21.1-neoforge` | 1.21.1 | NeoForge | client and dedicated server verified |
 | `26.1-fabric` | 26.1 | Fabric | verified through resource reload |
 | `26.1-neoforge` | 26.1 | NeoForge | verified through resource reload |
 | `26.1.1-fabric` | 26.1.1 | Fabric | verified through resource reload |
@@ -45,8 +50,10 @@ gets a generated compatibility source view.
 1. Start from a working, single-version build for both loaders.
 2. Record the exact dependencies that successfully start each current loader.
 3. Save a clean baseline run log for Fabric and NeoForge.
-4. Keep existing code canonical for the oldest supported version unless a newer
-   API is clearly the more stable shared abstraction.
+4. Keep existing code canonical for the most actively maintained version unless
+   the oldest API is a clean shared abstraction. Generate an explicit legacy
+   view for demonstrated backward differences instead of downgrading every
+   current target.
 5. Do not promise support from a compile result alone. Client mixins, metadata,
    resource formats, and NeoForge's launch pipeline are runtime concerns.
 
@@ -92,6 +99,10 @@ stonecutter {
     kotlinController = false // only when retaining Groovy build scripts
 
     create(rootProject) {
+        version('1.21-fabric', '1.21')
+        version('1.21-neoforge', '1.21')
+        version('1.21.1-fabric', '1.21.1')
+        version('1.21.1-neoforge', '1.21.1')
         version('26.1-fabric', '26.1')
         version('26.1-neoforge', '26.1')
         version('26.1.1-fabric', '26.1.1')
@@ -299,6 +310,82 @@ Generated source views must be declared as task inputs and compilation must
 depend on their generation task. Otherwise IntelliJ/Gradle can compile stale
 files and hide a source compatibility failure.
 
+### Backporting a 26.x Architectury mod to 1.21 / 1.21.1
+
+Backward ports cross a larger API and data-format boundary than nearby forward
+updates. Treat `1.21` and `1.21.1` as a legacy generation with its own pinned
+Loom, Architectury, loader, Java, source, and resource behavior. Do not add
+their property files and assume the current build configuration will work.
+
+Fishing Frenzy's verified legacy target properties use this shape:
+
+```properties
+# gradle/matrix/1.21.1-neoforge.properties
+minecraft_version=1.21.1
+loader=neoforge
+java_version=21
+loom_generation=legacy
+architectury_api_version=13.0.8
+neoforge_version=21.1.220
+```
+
+The legacy generation uses Loom 1.7.414 and Architectury 13. The modern
+Architectury plugin/transformer is deliberately not applied to those targets:
+Fishing Frenzy has no `@ExpectPlatform` calls that need its runtime transform,
+and the later transformer prevented early NeoForge from completing bootstrap.
+This is project-specific evidence, not permission to omit Architectury setup
+in another mod: search that mod for `@ExpectPlatform`, platform-only classes,
+and other Architectury transform requirements first.
+
+Use a generated source/resource view only for concrete differences that have
+been inspected and tested. Fishing Frenzy's legacy generator accounts for:
+
+| Difference | Legacy adaptation |
+| --- | --- |
+| Current Java 25 runtime vs old loader/Mixin | Run game tasks with Gradle's Java 21 `javaLauncher`. |
+| `FishingHookRenderer` rod check changed | Replace the current `getHoldingArm` redirect with the 1.21 `getPlayerHandPos` / `ItemStack.is` redirect. |
+| Entity/render-state API did not exist | Generate the older entity-model and renderer method shapes. |
+| Entity builder registration and attributes differ | Generate only the established 1.21 builder/attribute calls. |
+| 26.x item definitions and ingredient strings | Remove `assets/<modid>/items/` definitions; convert recipe ingredients back to `{ "item": ... }` / `{ "tag": ... }`; restore the old rod-model override. |
+| NeoForge client renderer events | Add `EventBusSubscriber.Bus.MOD` only in the legacy NeoForge generated source. |
+| NeoForge-only current compatibility mixin | Remove its declaration and file when it addresses a 26.x API rename that is absent in 1.21. |
+
+Do not use broad global replacements for a backport. Each replacement must be
+scoped to one source/resource, explain the old API, and be covered by a legacy
+client and server smoke test.
+
+### Java 21 and IntelliJ run tasks
+
+The 1.21 generation must run on Java 21 even if Gradle itself uses Java 25.
+Configure the launcher, not `JavaExec.executable`:
+
+```groovy
+def legacyJavaLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(21)
+}
+
+gradle.projectsEvaluated {
+    tasks.withType(JavaExec).configureEach {
+        javaLauncher.set(legacyJavaLauncher)
+    }
+}
+```
+
+Never set both `executable` and `javaLauncher`. Loom already configures a
+toolchain-aware run task; Gradle accepts the command-line path in some cases
+but IntelliJ's Gradle runner rejects the conflict with:
+
+```text
+Toolchain from `executable` property does not match toolchain from
+`javaLauncher` property.
+```
+
+After refreshing Gradle in IntelliJ, run the generated target directly under
+`<target> > Tasks > loom > runClient` (for example,
+`1.21.1-neoforge > Tasks > loom > runClient`). This is the correct task. If
+Java 21 is not auto-detected, point Gradle's Java toolchain discovery at a JDK
+21 installation; do not hard-code a Prism runtime executable into the build.
+
 ## 7. Add aggregate verification tasks
 
 Keep the list of supported targets in one place. Then expose tasks that an IDE,
@@ -306,6 +393,8 @@ CI job, or agent can invoke without remembering every target:
 
 ```groovy
 def matrixTargets = [
+    '1.21-fabric', '1.21-neoforge',
+    '1.21.1-fabric', '1.21.1-neoforge',
     '26.1-fabric', '26.1-neoforge',
     '26.1.1-fabric', '26.1.1-neoforge',
     '26.1.2-fabric', '26.1.2-neoforge',

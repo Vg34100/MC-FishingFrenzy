@@ -327,10 +327,9 @@ loader's client lifecycle.
 
 ### Multi-Version Matrix
 
-The `feature/multiversion-26.2` branch uses Stonecutter to compile the supported matrix:
+The Stonecutter branch uses a supported matrix:
 
-- Fabric 26.1.2 and 26.2
-- NeoForge 26.1.2 and 26.2
+- Fabric and NeoForge 1.21, 1.21.1, 26.1, 26.1.1, 26.1.2, and 26.2
 
 Use the smart wrapper rather than invoking individual generated Stonecutter projects:
 
@@ -344,6 +343,19 @@ python build-smart.py matrix          # all matrix checks
 `matrix:server` verifies that each dedicated-server launch configuration can be generated; it
 does not start Minecraft and therefore is not a replacement for the dedicated-server runtime
 smoke test above before a release.
+
+### Legacy 1.21 / 1.21.1 Matrix Rules
+
+- These targets require Java 21 for `runClient` and `runServer`; Gradle itself may still use Java 25.
+- Configure legacy run tasks through `javaLauncher`, never both `javaLauncher` and `executable`.
+  The latter causes IntelliJ's Gradle runner to fail with a toolchain mismatch.
+- The IntelliJ task path `<target> > Tasks > loom > runClient` is correct after a Gradle refresh.
+- Legacy resources and sources are generated under that target's `build/matrix-*` directories;
+  change canonical `common/`, `fabric/`, or `neoforge/` inputs and the narrow generator rules,
+  never generated output.
+- A backward port must have both client and dedicated-server runtime smoke tests. Compilation is
+  particularly weak evidence across the 26.x-to-1.21 API/resource boundary.
+- Read `docs/development/stonecutter-multiversion-migration.md` before adding another legacy target.
 
 Run the two servers sequentially unless their `server-port` values differ; both default to
 `25565`. For a local Fabric `runClient` multiplayer test, set
