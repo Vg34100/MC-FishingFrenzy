@@ -90,7 +90,7 @@ if (isNeoForge) {
 sourceSets {
     main {
         java {
-            if (matrixValue('minecraft_version') == '26.2') {
+            if (matrixValue('minecraft_version') == '26.2' || usesLegacyLoom) {
                 setSrcDirs([
                         layout.buildDirectory.dir('matrix-sources/common').get().asFile,
                         layout.buildDirectory.dir("matrix-sources/${loader}").get().asFile
@@ -100,6 +100,9 @@ sourceSets {
                         rootProject.file('common/src/main/java'),
                         rootProject.file("${loader}/src/main/java")
                 ])
+            }
+            if (usesLegacyLoom) {
+                exclude 'net/vg/fishingfrenzy/fabric/data/**'
             }
         }
         resources {
@@ -111,6 +114,256 @@ sourceSets {
                 srcDir rootProject.file('fabric/src/main/generated')
             }
         }
+    }
+}
+
+// The 1.21 renderer and entity APIs predate the render-state model introduced
+// later in the 26.x line. Generate a legacy view from the canonical sources so
+// that the compatibility edits remain explicit and do not fork the main tree.
+if (usesLegacyLoom) {
+    ['common', loader].each { sourceName ->
+        tasks.register("prepare${sourceName.capitalize()}LegacySources", Sync) {
+            from rootProject.file("${sourceName}/src/main/java")
+            into layout.buildDirectory.dir("matrix-sources/${sourceName}")
+            filteringCharset = 'UTF-8'
+            doLast {
+                def legacyReplacements = [
+                        'net.minecraft.resources.Identifier': 'net.minecraft.resources.ResourceLocation',
+                        'Identifier.fromNamespaceAndPath': 'ResourceLocation.fromNamespaceAndPath',
+                        'net.minecraft.advancements.criterion.MinMaxBounds': 'net.minecraft.advancements.critereon.MinMaxBounds',
+                        'net.minecraft.world.entity.EntitySpawnReason': 'net.minecraft.world.entity.MobSpawnType',
+                        'net.minecraft.world.entity.animal.fish.AbstractSchoolingFish': 'net.minecraft.world.entity.animal.AbstractSchoolingFish',
+                        'net.minecraft.world.entity.animal.fish.WaterAnimal': 'net.minecraft.world.entity.animal.WaterAnimal',
+                        'net.minecraft.world.level.gamerules.GameRules': 'net.minecraft.world.level.GameRules',
+                        'Identifier': 'ResourceLocation',
+                        'EntitySpawnReason': 'MobSpawnType',
+                        'AbstractSchoolingFish': 'AbstractSchoolingFish'
+                ]
+                fileTree(destinationDir).matching { include '**/*.java' }.files.each { sourceFile ->
+                    def source = sourceFile.getText('UTF-8')
+                    legacyReplacements.each { from, to -> source = source.replace(from, to) }
+
+                    if (sourceFile.path.replace('\\', '/').contains('/entity/client/') && source.contains('LivingEntityRenderState')) {
+                        source = source.replace(
+                                'import net.minecraft.client.model.EntityModel;',
+                                'import net.minecraft.client.model.EntityModel;\nimport com.mojang.blaze3d.vertex.PoseStack;\nimport com.mojang.blaze3d.vertex.VertexConsumer;\nimport net.vg.fishingfrenzy.entity.mob.CustomBreedableSchoolingFishEntity;'
+                        )
+                        source = source.replaceAll(/import net\.minecraft\.client\.renderer\.entity\.state\.LivingEntityRenderState;\s*/, '')
+                        source = source.replace('EntityModel<LivingEntityRenderState>', 'EntityModel<CustomBreedableSchoolingFishEntity>')
+                        source = source.replaceAll(/\s*super\(root\.getChild\("[^"]+"\)\);/, '')
+                        source = source.replace('private void applySwimmingAnimation(LivingEntityRenderState state)',
+                                'private void applySwimmingAnimation(CustomBreedableSchoolingFishEntity entity, float ageInTicks)')
+                        source = source.replace('state.ageInTicks', 'ageInTicks')
+                        source = source.replace('state.isInWater', 'entity.isInWater()')
+                        source = source.replace('public void setupAnim(LivingEntityRenderState state)',
+                                'public void setupAnim(CustomBreedableSchoolingFishEntity entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch)')
+                        source = source.replace('this.setHeadAngles(state.yRot, state.xRot);', 'this.setHeadAngles(netHeadYaw, headPitch);')
+                        source = source.replace('this.applySwimmingAnimation(state);', 'this.applySwimmingAnimation(entity, ageInTicks);')
+                        def modelRootMatcher = source =~ /private final ModelPart (\w+);/
+                        if (modelRootMatcher.find()) {
+                            def modelRoot = modelRootMatcher.group(1)
+                            source = source.replace('this.root().getAllParts().forEach(ModelPart::resetPose);',
+                                    "this.${modelRoot}.getAllParts().forEach(ModelPart::resetPose);")
+                            source = source.replaceFirst(/\n}\s*$/, """
+
+    @Override
+    public void renderToBuffer(PoseStack poseStack, VertexConsumer vertexConsumer, int packedLight, int packedOverlay, int color) {
+        this.${modelRoot}.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+    }
+}
+""")
+                        }
+                    }
+
+                    if (sourceFile.name == 'DynamicFishSystem.java') {
+                        source = source.replaceAll(/import net\.minecraft\.client\.renderer\.entity\.state\.LivingEntityRenderState;\s*/, '')
+                        source = source.replace('LivingEntityRenderState', 'CustomBreedableSchoolingFishEntity')
+                        source = source.replace('EntityRenderer<CustomBreedableSchoolingFishEntity, ?>', 'EntityRenderer<CustomBreedableSchoolingFishEntity>')
+                        source = source.replace('MobRenderer<CustomBreedableSchoolingFishEntity, CustomBreedableSchoolingFishEntity, EntityModel<CustomBreedableSchoolingFishEntity>>',
+                                'MobRenderer<CustomBreedableSchoolingFishEntity, EntityModel<CustomBreedableSchoolingFishEntity>>')
+                        source = source.replaceAll(/(?s)\n        @Override\n        public CustomBreedableSchoolingFishEntity createRenderState\(\) \{.*?\n        \}/, '')
+                        source = source.replaceAll(/(?s)\n        @Override\n        public void extractRenderState\(CustomBreedableSchoolingFishEntity entity, CustomBreedableSchoolingFishEntity state, float partialTick\) \{.*?\n        \}/, '')
+                        source = source.replace('getTextureLocation(CustomBreedableSchoolingFishEntity state)',
+                                'getTextureLocation(CustomBreedableSchoolingFishEntity entity)')
+                        source = source.replace('setupRotations(CustomBreedableSchoolingFishEntity state,',
+                                'setupRotations(CustomBreedableSchoolingFishEntity entity,')
+                        source = source.replace('state.isBaby', 'entity.isBaby()')
+                        source = source.replace('state.isInWater', 'entity.isInWater()')
+                    }
+
+                    if (sourceFile.name == 'BreedableSchoolingFishEntity.java') {
+                        source = source.replaceAll(/import net\.minecraft\.core\.UUIDUtil;\s*/, '')
+                        source = source.replaceAll(/import net\.minecraft\.world\.level\.storage\.ValueInput;\s*/, '')
+                        source = source.replaceAll(/import net\.minecraft\.world\.level\.storage\.ValueOutput;\s*/, '')
+                        source = source.replace(
+                                'public void addAdditionalSaveData(ValueOutput output)',
+                                'public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag tag)'
+                        )
+                        source = source.replace(
+                                'super.addAdditionalSaveData(output);',
+                                'super.addAdditionalSaveData(tag);'
+                        )
+                        source = source.replace('output.putInt(', 'tag.putInt(')
+                        source = source.replace('output.storeNullable("LoveCause", UUIDUtil.STRING_CODEC, this.lovingPlayer);',
+                                'if (this.lovingPlayer != null) tag.putUUID("LoveCause", this.lovingPlayer);')
+                        source = source.replace(
+                                'public void readAdditionalSaveData(ValueInput input)',
+                                'public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag tag)'
+                        )
+                        source = source.replace('super.readAdditionalSaveData(input);', 'super.readAdditionalSaveData(tag);')
+                        source = source.replace('input.getIntOr("Age", 0)', 'tag.getInt("Age")')
+                        source = source.replace('input.getIntOr("ForcedAge", 0)', 'tag.getInt("ForcedAge")')
+                        source = source.replace('input.getIntOr("InLove", 0)', 'tag.getInt("InLove")')
+                        source = source.replace('input.read("LoveCause", UUIDUtil.STRING_CODEC).orElse(null)',
+                                'tag.hasUUID("LoveCause") ? tag.getUUID("LoveCause") : null')
+                    }
+
+                    if (sourceFile.name == 'FishRegistry.java') {
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.component\.Consumable;\s*/, '')
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.component\.TypedEntityData;\s*/, '')
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.consume_effects\.ApplyStatusEffectsConsumeEffect;\s*/, '')
+                        source = source.replaceAll(/(?s)        Consumable\.Builder consumable = Consumable\.builder\(\);.*?        return builder\.build\(\);/, '''        if (snack) {
+            builder.fast();
+        }
+        for (StatusEffectEntry entry : statusEffects) {
+            builder.effect(new MobEffectInstance(entry.effect(), entry.duration(), entry.amplifier()), entry.chance());
+        }
+        return builder.build();''')
+                        source = source.replaceAll(/(?s)new SpawnEggItem\(ModItems\.itemProperties\(name \+ "_spawn_egg"\)\s*\.component\(DataComponents\.ENTITY_DATA,\s*TypedEntityData\.of\(fishEntityType\.get\(\), new CompoundTag\(\)\)\)\)/,
+                                'new SpawnEggItem(fishEntityType.get(), properties.getPrimaryColor(), properties.getSecondaryColor(), new Item.Properties())')
+                    }
+
+                    if (sourceFile.name == 'ModItems.java') {
+                        source = source.replaceAll(/(?s)    public static Item\.Properties itemProperties\(String name\) \{.*?\n    \}/,
+                                '    public static Item.Properties itemProperties(String name) {\n        return new Item.Properties();\n    }')
+                    }
+
+                    if (sourceFile.name == 'BaitItem.java') {
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.component\.TooltipDisplay;\s*/, '')
+                        source = source.replaceAll(/import java\.util\.function\.Consumer;\s*/, '')
+                        source = source.replace('TooltipDisplay display, Consumer<Component> addLine', 'List<Component> tooltip')
+                        source = source.replace('super.appendHoverText(stack, context, display, addLine, tooltipFlag);',
+                                'super.appendHoverText(stack, context, tooltip, tooltipFlag);')
+                        source = source.replace('addLine.accept(', 'tooltip.add(')
+                    }
+
+                    if (sourceFile.name == 'DeluxeFishingRodItem.java') {
+                        source = source.replace('import net.minecraft.world.InteractionResult;', 'import net.minecraft.world.InteractionResultHolder;')
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.ItemStackTemplate;\s*/, '')
+                        source = source.replaceAll(/import net\.minecraft\.world\.item\.component\.TooltipDisplay;\s*/, '')
+                        source = source.replaceAll(/import java\.util\.function\.Consumer;\s*/, '')
+                        source = source.replace('public InteractionResult use(', 'public InteractionResultHolder<ItemStack> use(')
+                        source = source.replace('rodStack.hurtAndBreak(i, pPlayer, pHand);', 'rodStack.hurtAndBreak(i, pPlayer, LivingEntity.getSlotForHand(pHand));')
+                        source = source.replace('return InteractionResult.SUCCESS;', 'return InteractionResultHolder.sidedSuccess(rodStack, pLevel.isClientSide);')
+                        source = source.replaceAll(/for \(ItemStackTemplate template : bundleContentsComponent\.items\(\)\) \{\s*if \(template\.item\(\)\.value\(\) instanceof BaitItem\) \{\s*return template\.create\(\);/,
+                                'for (ItemStack itemStack : bundleContentsComponent.items()) {\n            if (itemStack.getItem() instanceof BaitItem) {\n                return itemStack.copy();')
+                        source = source.replaceAll(/List<ItemStack> stacks = bundleContentsComponent\.itemCopyStream\(\)\.collect\(Collectors\.toList\(\)\);/,
+                                'List<ItemStack> stacks = new ArrayList<>(bundleContentsComponent.items());')
+                        source = source.replaceAll(/(?s)List<ItemStackTemplate> templates = stacks\.stream\(\)\s*\.map\(s -> new ItemStackTemplate\(s\.getItem\(\), s\.getCount\(\)\)\)\s*\.collect\(Collectors\.toList\(\)\);\s*rodStack\.set\(DataComponents\.BUNDLE_CONTENTS, new BundleContents\(templates\)\);/,
+                                'rodStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(stacks));')
+                        source = source.replace('public boolean isBarVisible(ItemStack stack)', 'public boolean isBundleBarVisible(ItemStack stack)')
+                        source = source.replace('public int getBarWidth(ItemStack stack)', 'public int getBundleBarWidth(ItemStack stack)')
+                        source = source.replace('public int getBarColor(ItemStack stack)', 'public int getBundleBarColor()')
+                        source = source.replaceAll(/@Override\s*\n        public boolean isBundleBarVisible/, 'public boolean isBundleBarVisible')
+                        source = source.replaceAll(/@Override\s*\n        public int getBundleBarWidth/, 'public int getBundleBarWidth')
+                        source = source.replaceAll(/@Override\s*\n        public int getBundleBarColor/, 'public int getBundleBarColor')
+                        source = source.replaceAll(/@Override\s+public boolean isBundleBarVisible/, 'public boolean isBundleBarVisible')
+                        source = source.replaceAll(/@Override\s+public int getBundleBarWidth/, 'public int getBundleBarWidth')
+                        source = source.replaceAll(/@Override\s+public int getBundleBarColor/, 'public int getBundleBarColor')
+                        source = source.replaceAll(/public void appendHoverText\(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> addLine, TooltipFlag tooltipFlag\) \{\s*BundleContents bundleContents = stack\.get\(DataComponents\.BUNDLE_CONTENTS\);\s*addLine\.accept\(Component\.translatable\("item\.fishingfrenzy\.deluxe_fishing_rod\.hint"\)\.withStyle\(ChatFormatting\.DARK_GRAY\)\);\s*if \(bundleContents != null\) \{\s*int used = bundleContents\.weight\(\)\.result\(\)\.map\(w -> Mth\.mulAndTruncate\(w, 64\)\)\.orElse\(0\);\s*addLine\.accept\(Component\.literal\("Bait: " \+ used \+ "\/64"\)\.withStyle\(ChatFormatting\.GRAY\)\);/,
+                                'public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag tooltipFlag) {\n        BundleContents bundleContents = stack.get(DataComponents.BUNDLE_CONTENTS);\n        tooltip.add(Component.translatable("item.fishingfrenzy.deluxe_fishing_rod.hint").withStyle(ChatFormatting.DARK_GRAY));\n        if (bundleContents != null) {\n            int used = Mth.mulAndTruncate(bundleContents.weight(), 64);\n            tooltip.add(Component.literal("Bait: " + used + "/64").withStyle(ChatFormatting.GRAY));')
+                        source = source.replace('ItemUtils.onContainerDestroyed(itemEntity, bundleContents.itemCopyStream());',
+                                'ItemUtils.onContainerDestroyed(itemEntity, bundleContents.itemsCopy());')
+                        source = source.replace('new ArrayList<>(bundleContentsComponent.items())',
+                                'new ArrayList<ItemStack>((List<ItemStack>) bundleContentsComponent.items())')
+                        source = source.replace('bundleContents.weight().result().map(w -> w.compareTo(Fraction.ZERO) > 0).orElse(false)',
+                                'bundleContents.weight().compareTo(Fraction.ZERO) > 0')
+                        source = source.replace('bundleContents.weight().result().map(w -> Math.min(1 + Mth.mulAndTruncate(w, 12), 13)).orElse(0)',
+                                'Math.min(1 + Mth.mulAndTruncate(bundleContents.weight(), 12), 13)')
+                    }
+
+                    if (sourceFile.name == 'TargetBaitItem.java') {
+                        source = source.replace('nbt.getIntOr("PrimaryColor", 0xFFFFFF)',
+                                'nbt.contains("PrimaryColor") ? nbt.getInt("PrimaryColor") : 0xFFFFFF')
+                        source = source.replace('nbt.getIntOr("SecondaryColor", 0xFFFFFF)',
+                                'nbt.contains("SecondaryColor") ? nbt.getInt("SecondaryColor") : 0xFFFFFF')
+                    }
+
+                    if (sourceFile.name == 'CustomBreedableSchoolingFishEntity.java') {
+                        source = source.replace('protected void dropFromLootTable(ServerLevel serverLevel, DamageSource damageSource, boolean bl)',
+                                'protected void dropFromLootTable(DamageSource damageSource, boolean bl)')
+                        source = source.replace('super.dropFromLootTable(serverLevel, damageSource, bl);',
+                                'super.dropFromLootTable(damageSource, bl);')
+                        source = source.replace('this.spawnAtLocation(serverLevel, ', 'this.spawnAtLocation(')
+                        source = source.replace('this.walkAnimation.update(f, 0.2f, 1.0f);', 'this.walkAnimation.update(f, 0.2f);')
+                        source = source.replace('.create(level, MobSpawnType.BREEDING)', '.create(level)')
+                        source = source.replace('.snapTo(', '.moveTo(')
+                        source = source.replace('GameRules.MOB_DROPS', 'GameRules.RULE_DOMOBLOOT')
+                        source = source.replace('level.getGameRules().get(GameRules.RULE_DOMOBLOOT)',
+                                'level.getGameRules().getBoolean(GameRules.RULE_DOMOBLOOT)')
+                    }
+
+                    if (sourceFile.name == 'BreedableSchoolingFishEntity.java') {
+                        source = source.replace('.snapTo(', '.moveTo(')
+                        source = source.replace('GameRules.MOB_DROPS', 'GameRules.RULE_DOMOBLOOT')
+                        source = source.replace('level.getGameRules().get(GameRules.RULE_DOMOBLOOT)',
+                                'level.getGameRules().getBoolean(GameRules.RULE_DOMOBLOOT)')
+                    }
+
+                    if (sourceFile.name == 'FishingFrenzyDebugCommands.java') {
+                        source = source.replace('Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)', 'source -> source.hasPermission(2)')
+                        source = source.replace('.create(level, MobSpawnType.NATURAL)', '.create(level)')
+                    }
+
+                    if (sourceFile.name == 'DeluxeFishingHook.java') {
+                        source = source.replace('this.level().getServer().schedule(new TickTask(l * 5, () -> {',
+                                'this.level().getServer().execute(() -> {')
+                        source = source.replace('                        }));', '                        });')
+                    }
+
+                    if (sourceFile.name == 'FishPreset.java') {
+                        source = source.replace('MobEffects.STRENGTH', 'MobEffects.DAMAGE_BOOST')
+                        source = source.replace('MobEffects.HASTE', 'MobEffects.DIG_SPEED')
+                        source = source.replace('MobEffects.SPEED', 'MobEffects.MOVEMENT_SPEED')
+                        source = source.replace('MobEffects.JUMP_BOOST', 'MobEffects.JUMP')
+                    }
+
+                    if (sourceFile.name == 'DynamicFishEntityGenerator.java') {
+                        source = source.replaceAll(/(?s)\.build\(\s*ResourceKey\.create\(\s*Registries\.ENTITY_TYPE,\s*ResourceLocation\.fromNamespaceAndPath\(Constants\.MOD_ID, entityName\)\s*\)\s*\)/,
+                                '.build(entityName)')
+                        source = source.replaceAll(/\.add\(Attributes\.ATTACK_DAMAGE, fishRegistry\.getAttackDamage\(\)\)\s*\.add\(Attributes\.TEMPT_RANGE, 10\.0\);/,
+                                '.add(Attributes.ATTACK_DAMAGE, fishRegistry.getAttackDamage());')
+                    }
+
+                    if (sourceFile.name == 'DynamicFishSystem.java') {
+                        source = source.replaceAll(/(?s)\s*@Override\s+public CustomBreedableSchoolingFishEntity createRenderState\(\) \{.*?\n\s*\}/, '')
+                        source = source.replaceAll(/(?s)\s*@Override\s+public void extractRenderState\(CustomBreedableSchoolingFishEntity entity, CustomBreedableSchoolingFishEntity state, float partialTick\) \{.*?\n\s*\}/, '')
+                        source = source.replace('protected void setupRotations(CustomBreedableSchoolingFishEntity entity, PoseStack poseStack, float ageInTicks, float rotationYaw)',
+                                'protected void setupRotations(CustomBreedableSchoolingFishEntity entity, PoseStack poseStack, float ageInTicks, float rotationYaw, float partialTick, float scale)')
+                        source = source.replace('super.setupRotations(state, poseStack, ageInTicks, rotationYaw);',
+                                'super.setupRotations(entity, poseStack, ageInTicks, rotationYaw, partialTick, scale);')
+                        source = source.replaceAll(/@Override\s+protected void setupRotations/, '@Override\n        protected void setupRotations')
+                    }
+
+                    if (sourceFile.name == 'ModItems.java') {
+                        source = source.replace('.enchantable(1)', '')
+                    }
+
+                    if (sourceFile.name == 'ModEntitySpawns.java') {
+                        source = source.replaceAll(/fishRegistry\.getFishEntityType\(\)\.get\(\),\s*fishRegistry\.getGroupSizes\(\)\.getFirst\(\),/,
+                                'fishRegistry.getFishEntityType().get(),\n                                    fishRegistry.getSpawningWeight(),\n                                    fishRegistry.getGroupSizes().getFirst(),')
+                        source = source.replace('biomeKey.identifier()', 'biomeKey.location()')
+                        source = source.replaceAll(/\),\s*fishRegistry\.getSpawningWeight\(\)\s*\)/, '))')
+                    }
+
+                    sourceFile.setText(source, 'UTF-8')
+                }
+            }
+        }
+    }
+    tasks.named('compileJava') {
+        dependsOn tasks.named('prepareCommonLegacySources')
+        dependsOn tasks.named("prepare${loader.capitalize()}LegacySources")
     }
 }
 
@@ -152,12 +405,14 @@ dependencies {
     minecraft "net.minecraft:minecraft:${matrixValue('minecraft_version')}"
     if (usesLegacyLoom) {
         mappings loom.officialMojangMappings()
+        compileOnly 'net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7'
     }
     if (isFabric) {
-        implementation "net.fabricmc:fabric-loader:${matrixValue('fabric_loader_version')}"
-        implementation "net.fabricmc.fabric-api:fabric-api:${matrixValue('fabric_api_version')}"
-        implementation "dev.architectury:architectury-fabric:${matrixValue('architectury_api_version')}"
-        implementation "com.terraformersmc:modmenu:${matrixValue('modmenu_version')}"
+        def fabricDependency = usesLegacyLoom ? { notation -> modImplementation notation } : { notation -> implementation notation }
+        fabricDependency("net.fabricmc:fabric-loader:${matrixValue('fabric_loader_version')}")
+        fabricDependency("net.fabricmc.fabric-api:fabric-api:${matrixValue('fabric_api_version')}")
+        fabricDependency("dev.architectury:architectury-fabric:${matrixValue('architectury_api_version')}")
+        fabricDependency("com.terraformersmc:modmenu:${matrixValue('modmenu_version')}")
         if (matrix.getProperty('mixinextras_version') != null) {
             implementation "io.github.llamalad7:mixinextras-fabric:${matrixValue('mixinextras_version')}"
         }
