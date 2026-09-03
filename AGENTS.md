@@ -354,8 +354,9 @@ smoke test above before a release.
   change canonical `common/`, `fabric/`, or `neoforge/` inputs and the narrow generator rules,
   never generated output.
 - Item-definition tint data is 26.x-only. If a legacy item needs dynamic color, register it through
-  Fabric's item color registry and NeoForge's legacy `RegisterColorHandlersEvent.Item`; fish-textured
-  spawn eggs must override vanilla egg tinting with white.
+  Fabric's item color registry and NeoForge's legacy `RegisterColorHandlersEvent.Item`. These callbacks
+  require opaque `0xFFRRGGBB` colors; fish-textured spawn eggs must override vanilla egg tinting with
+  opaque white.
 - Canonical NeoForge 26.2 metadata uses `iconFile`; generate `logoFile` only for legacy NeoForge
   resources, rather than leaving a deprecated key in current releases.
 - A backward port must have both client and dedicated-server runtime smoke tests. Compilation is

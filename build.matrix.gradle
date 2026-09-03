@@ -288,13 +288,13 @@ import net.vg.fishingfrenzy.item.fish.FishManager;'''
                 .map(supplier -> supplier.get())
                 .toArray(Item[]::new);
         event.register((stack, tintIndex) -> stack.getItem() instanceof TargetBaitItem bait
-                ? bait.getColor(tintIndex) : 0xFFFFFF, targetedBaits);
+                ? 0xFF000000 | bait.getColor(tintIndex) : 0xFFFFFFFF, targetedBaits);
 
         Item[] spawnEggs = FishManager.getItemsByType(FishManager.ItemType.SPAWN_EGG).stream()
                 .map(supplier -> supplier.get())
                 .toArray(Item[]::new);
         // Fish-textured eggs must not inherit SpawnEggItem's egg-shell tint.
-        event.register((stack, tintIndex) -> 0xFFFFFF, spawnEggs);
+        event.register((stack, tintIndex) -> 0xFFFFFFFF, spawnEggs);
     }
 }'''
                         )
@@ -326,12 +326,12 @@ import net.vg.fishingfrenzy.item.fish.FishManager;'''
                 .map(supplier -> supplier.get())
                 .toArray(Item[]::new);
         ColorProviderRegistry.ITEM.register((stack, tintIndex) -> stack.getItem() instanceof TargetBaitItem bait
-                ? bait.getColor(tintIndex) : 0xFFFFFF, targetedBaits);
+                ? 0xFF000000 | bait.getColor(tintIndex) : 0xFFFFFFFF, targetedBaits);
 
         Item[] spawnEggs = FishManager.getItemsByType(FishManager.ItemType.SPAWN_EGG).stream()
                 .map(supplier -> supplier.get())
                 .toArray(Item[]::new);
-        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> 0xFFFFFF, spawnEggs);
+        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> 0xFFFFFFFF, spawnEggs);
     }
 }'''
                         )
