@@ -69,15 +69,6 @@ if (usesLegacyLoom) {
         silentMojangMappingsLicense()
     }
 
-    // 1.21's Fabric/Mixin toolchain cannot parse Java 25 classes at launch.
-    // Use Gradle's toolchain API rather than JavaExec#executable: Loom also
-    // configures javaLauncher, and setting both produces an IntelliJ-only
-    // failure even when the command-line task works.
-    def legacyJavaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(javaVersion)
-    }
-    project.ext.legacyJavaLauncher = legacyJavaLauncher
-
     tasks.register('verifyLegacyRuntime') {
         group = 'verification'
         description = 'Verifies that legacy game launch tasks use the Java 21 toolchain.'
@@ -602,6 +593,15 @@ java {
     withSourcesJar()
     sourceCompatibility = JavaVersion.toVersion(javaVersion)
     targetCompatibility = JavaVersion.toVersion(javaVersion)
+    if (usesLegacyLoom) {
+        // Configure Java 21 at the project level before Loom creates and
+        // finalizes its JavaExec tasks.  Do not set JavaExec#executable or
+        // mutate a task's javaLauncher after evaluation: IntelliJ's Gradle
+        // task model rightfully rejects either conflict.
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(javaVersion)
+        }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -640,21 +640,6 @@ loom {
     runs {
         configureEach {
             runDir = rootProject.file("runs/${project.name}/${name}")
-        }
-    }
-}
-
-// Loom creates the run tasks after the project is configured.  Apply the
-// compatible launcher afterward, while retaining a single source of truth for
-// both Gradle and IntelliJ.
-if (usesLegacyLoom && project.ext.has('legacyJavaLauncher')) {
-    def legacyRuntimeLauncher = project.ext.legacyJavaLauncher
-    gradle.projectsEvaluated {
-        tasks.withType(JavaExec).configureEach {
-            javaLauncher.set(legacyRuntimeLauncher)
-            doFirst {
-                logger.lifecycle("${path} launching with ${javaLauncher.get().metadata.installationPath}")
-            }
         }
     }
 }

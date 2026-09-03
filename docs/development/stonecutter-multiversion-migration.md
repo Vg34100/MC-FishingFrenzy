@@ -357,23 +357,20 @@ client and server smoke test.
 ### Java 21 and IntelliJ run tasks
 
 The 1.21 generation must run on Java 21 even if Gradle itself uses Java 25.
-Configure the launcher, not `JavaExec.executable`:
+Set the target project's Java toolchain before Loom creates its run tasks:
 
 ```groovy
-def legacyJavaLauncher = javaToolchains.launcherFor {
-    languageVersion = JavaLanguageVersion.of(21)
-}
-
-gradle.projectsEvaluated {
-    tasks.withType(JavaExec).configureEach {
-        javaLauncher.set(legacyJavaLauncher)
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 ```
 
-Never set both `executable` and `javaLauncher`. Loom already configures a
-toolchain-aware run task; Gradle accepts the command-line path in some cases
-but IntelliJ's Gradle runner rejects the conflict with:
+Loom derives each run task's `javaLauncher` from that project toolchain. Never
+set `JavaExec.executable`, and do not mutate a run task's `javaLauncher` after
+Loom has finalized it. Gradle may accept an executable-path override in some
+command-line cases, but IntelliJ's Gradle runner rejects the conflict with:
 
 ```text
 Toolchain from `executable` property does not match toolchain from
