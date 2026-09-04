@@ -720,3 +720,12 @@ loom {
 tasks.named('jar') {
     destinationDirectory = rootProject.layout.buildDirectory.dir("libs/${project.name}")
 }
+
+if (usesLegacyLoom) {
+    // `jar` is deliberately the named-development artifact (`-dev.jar`). Loom's
+    // remapJar is the installable Fabric/NeoForge artifact, so keep it alongside
+    // the rest of the matrix release jars rather than in a per-node build folder.
+    tasks.named('remapJar') {
+        destinationDirectory = rootProject.layout.buildDirectory.dir("libs/${project.name}")
+    }
+}

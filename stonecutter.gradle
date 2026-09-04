@@ -22,8 +22,14 @@ tasks.register('compileMatrix') {
 
 tasks.register('packageMatrix') {
     group = 'build'
-    description = 'Processes resources and assembles one jar for every matrix target.'
-    dependsOn matrixTargets.collect { ":${it}:jar" }
+    description = 'Processes resources and assembles installable jars for every matrix target.'
+    dependsOn matrixTargets.collect { target ->
+        // Legacy Loom's `jar` output is Mojang-named `-dev.jar`; only remapJar
+        // can be installed in a real Fabric/NeoForge instance.
+        (target.startsWith('1.21-') || target.startsWith('1.21.1-'))
+                ? ":${target}:remapJar"
+                : ":${target}:jar"
+    }
 }
 
 tasks.register('verifyServerLaunchSetup') {

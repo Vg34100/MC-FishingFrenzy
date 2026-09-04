@@ -405,7 +405,11 @@ tasks.register('compileMatrix') {
 }
 
 tasks.register('packageMatrix') {
-    dependsOn matrixTargets.collect { ":${it}:jar" }
+    dependsOn matrixTargets.collect { target ->
+        (target.startsWith('1.21-') || target.startsWith('1.21.1-'))
+                ? ":${target}:remapJar"
+                : ":${target}:jar"
+    }
 }
 
 tasks.register('verifyServerLaunchSetup') {
@@ -426,12 +430,16 @@ runtime smoke tests before releases or server-sensitive changes.
 Use this order for every newly added target:
 
 1. `compileJava` — catches source/API issues.
-2. `jar` — catches resource processing and metadata expansion issues.
-3. `configureLaunch` — catches basic development launch wiring.
-4. `runClient` — wait past initial resource reload to a stable title screen.
-5. `runServer` — for releases or server-sensitive changes, reach the ready log
+2. `jar` — catches resource processing and metadata expansion issues. On legacy Loom
+   targets it is a Mojang-named `-dev.jar`, strictly for development; do not install it.
+3. `remapJar` — required release artifact for legacy Fabric/NeoForge targets. It remaps
+   Mojang names to the runtime namespace and is the jar users install. Configure its output
+   beside the matrix release jars, then make `packageMatrix` depend on it.
+4. `configureLaunch` — catches basic development launch wiring.
+5. `runClient` — wait past initial resource reload to a stable title screen.
+6. `runServer` — for releases or server-sensitive changes, reach the ready log
    line and stop cleanly.
-6. Connect a matching development client to the matching server when networking,
+7. Connect a matching development client to the matching server when networking,
    entities, registries, loot, or gameplay behavior changed.
 
 Steps 1–3 are necessary automation. They are not proof the target works.
