@@ -45,6 +45,12 @@ The shared Java/resources stay canonical in the normal `common/`, `fabric/`,
 and `neoforge/` directories. Only a target that needs source-level API changes
 gets a generated compatibility source view.
 
+Before declaring a target supported, use the accompanying
+[`stonecutter-port-acceptance-checklist.md`](stonecutter-port-acceptance-checklist.md).
+It distinguishes a compiling project, a development launch, and a real
+installable release jar—the three checks that caught the important failures in
+this matrix.
+
 ## Before changing the build
 
 1. Start from a working, single-version build for both loaders.
