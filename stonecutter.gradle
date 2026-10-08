@@ -1,5 +1,7 @@
 plugins {
     id 'dev.kikugie.stonecutter'
+    id 'com.modrinth.minotaur' version '2.8.10' apply false
+    id 'net.darkhax.curseforgegradle' version '1.3.33' apply false
 }
 
 // This is the version shown to the IDE. Matrix tasks compile every registered node.
@@ -42,4 +44,18 @@ tasks.register('verifyMatrix') {
     group = 'verification'
     description = 'Runs compilation, packaging, and dedicated-server launch setup for the complete matrix.'
     dependsOn 'compileMatrix', 'packageMatrix', 'verifyServerLaunchSetup'
+}
+
+// Release-only framework wiring; the central matrix/source build remains authoritative.
+subprojects {
+    afterEvaluate {
+        if (rootProject.file("gradle/matrix/${project.name}.properties").isFile()) {
+            apply from: rootProject.file('gradle/release-smoke.gradle')
+            if (providers.gradleProperty('publish_manifest').isPresent()) {
+                apply plugin: 'com.modrinth.minotaur'
+                apply plugin: 'net.darkhax.curseforgegradle'
+                apply from: rootProject.file('gradle/publishing.gradle')
+            }
+        }
+    }
 }

@@ -1,0 +1,41 @@
+import java.util.Properties
+
+// Only installable target output and actual required runtime dependencies.
+def pins = new Properties()
+rootProject.file("gradle/matrix/${project.name}.properties").withInputStream { pins.load(it) }
+def production = new Properties()
+rootProject.file('gradle/publishing.properties').withInputStream { production.load(it) }
+def runtimePin = { String key -> production.getProperty("release_smoke.${project.name}.${key}", pins.getProperty(key)) }
+def loader = pins.getProperty('loader')
+def legacy = pins.getProperty('loom_generation', 'current') == 'legacy'
+def installable = rootProject.file("build/libs/${project.name}/${rootProject.archives_name}-${loader}-${pins.getProperty('minecraft_version')}-${rootProject.mod_version}.jar")
+def runtimeMods = configurations.create('releaseRuntimeMods') {
+    canBeConsumed = false
+    canBeResolved = true
+    transitive = false
+}
+dependencies.add(runtimeMods.name, "dev.architectury:architectury-${loader}:${runtimePin('architectury_api_version')}")
+if (loader == 'fabric') {
+    dependencies.add(runtimeMods.name, "net.fabricmc.fabric-api:fabric-api:${runtimePin('fabric_api_version')}")
+}
+def runtimeDir = rootProject.file(providers.gradleProperty('release_smoke_dir').getOrElse(
+        rootProject.layout.buildDirectory.dir("release-smoke/${project.name}").get().asFile.absolutePath))
+def staged = tasks.register('stageReleaseClient', Sync) {
+    group = 'verification'
+    description = 'Stage the exact packaged release JAR and required production dependencies.'
+    from installable
+    from runtimeMods
+    into new File(runtimeDir, 'mods')
+}
+if (loader == 'fabric' && !legacy && production.getProperty("release_smoke.${project.name}.launcher") != 'portablemc') {
+    def productionTask = project.buildscript.classLoader.loadClass('net.fabricmc.loom.task.prod.ClientProductionRunTask')
+    tasks.register('runReleaseClient', productionTask) {
+        group = 'verification'
+        description = 'Run the staged installable Fabric JAR in production mode.'
+        dependsOn staged
+        runDir.set(runtimeDir)
+        mods.setFrom(provider { fileTree(new File(runtimeDir, 'mods')) { include '*.jar' } })
+        jvmArgs.addAll('-Xmx2G', '-Xlog:' + (legacy ? 'class*' : 'class+load') + '=info:file=class-load-%p.log')
+        programArgs.addAll('--username', 'ReleaseSmoke', '--accessToken', '0', '--version', pins.getProperty('minecraft_version'))
+    }
+}
