@@ -33,6 +33,7 @@ jobs:
     outputs:
       version: ${{ steps.assets.outputs.version }}
       tag: ${{ steps.assets.outputs.tag }}
+      commit: ${{ steps.revision.outputs.commit }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -46,6 +47,14 @@ jobs:
           python -c 'import os, runpy;
           m=runpy.run_path("scripts/publish-release.py")["publication_plan"]();
           assert os.environ["GITHUB_REF_NAME"] == m["tag"], "Release tag does not match mod_version"'
+      - name: Use the existing release tag for a manual publishing retry
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_draft || inputs.publish_github) }}
+        run: |
+          tag=$(python -c 'import runpy; print(runpy.run_path("scripts/publish-release.py")["publication_plan"]()["tag"])')
+          git checkout --detach "$tag"
+      - name: Record the exact artifact revision
+        id: revision
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Retrieve and hash-verify the pinned public Modrinth JARs
         run: python scripts/canonical-artifacts.py
       - name: Verify installable artifacts
@@ -71,6 +80,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
     steps:
       - name: Require explicit safe publication stages
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -85,6 +95,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.build.outputs.commit }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
@@ -102,7 +113,7 @@ jobs:
           title=$(python -c 'import json; print(json.load(open("build/publishing/github-assets/manifest.json"))["title"])')
           mapfile -t jars < <(python -c 'import json, pathlib; m=json.load(open("build/publishing/github-assets/manifest.json")); print("\n".join("build/publishing/github-assets/"+pathlib.Path(r["artifact"]).name for r in m["entries"]))')
           if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
-            if [ "$(git rev-parse "$RELEASE_TAG^{commit}")" != "$GITHUB_SHA" ]; then
+            if [ "$(git rev-parse "$RELEASE_TAG^{commit}")" != "$RELEASE_COMMIT" ]; then
               echo 'Release tag points to a different revision; refusing to change it.' >&2
               exit 1
             fi
@@ -112,9 +123,10 @@ jobs:
             gh release edit "$RELEASE_TAG" --title "$title" --notes-file "$bundle/release-notes.md"
             gh release upload "$RELEASE_TAG" "${jars[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" "${jars[@]}" --draft --title "$title" --notes-file "$bundle/release-notes.md" --target "$GITHUB_SHA"
+            gh release create "$RELEASE_TAG" "${jars[@]}" --draft --title "$title" --notes-file "$bundle/release-notes.md" --target "$RELEASE_COMMIT"
           fi
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/staged-release.json"
+          release_api=$(gh release view "$RELEASE_TAG" --json apiUrl --jq '.apiUrl')
+          gh api "$release_api" > "$RUNNER_TEMP/staged-release.json"
           python scripts/publish-release.py github-check "$RUNNER_TEMP/staged-release.json" "$bundle/manifest.json" draft
       - name: Publish GitHub draft only after all requested stages succeeded
         if: ${{ github.event_name == 'push' || inputs.publish_github }}
