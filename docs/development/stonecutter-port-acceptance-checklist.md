@@ -16,6 +16,8 @@ to build the matrix; this one defines when the work is actually complete.
 - [ ] Inspect `git status --short`; preserve all user-owned changes.
 - [ ] List every direct Minecraft API, mixin target, resource format, and
   loader-native hook likely to differ between the oldest and newest targets.
+- [ ] Identify sentinel targets: oldest Fabric, oldest NeoForge, canonical,
+  and each known dependency/API boundary.
 
 ## 2. Design the matrix before porting code
 
@@ -38,12 +40,20 @@ to build the matrix; this one defines when the work is actually complete.
 - [ ] Translate data/resource formats only for affected legacy nodes (for
   example item definitions, recipe ingredient shape, or model predicates).
 - [ ] Validate client-only registrations independently on Fabric and NeoForge.
+- [ ] For vanilla-derived behavior, inspect the target version's resource JSON,
+  concrete implementation class, and actual method body before adapting it.
+- [ ] Verify Mixins/invokers against exact runtime JVM descriptors; a lookalike
+  local type is not descriptor-compatible with a private target type.
 - [ ] If legacy item colors use a color-provider callback, return opaque ARGB
   values (`0xFFRRGGBB`), not 24-bit RGB values.
 - [ ] Record every transform's reason next to the transform and in the
   migration guide.
 
 ## 4. Build the correct artifact
+
+- [ ] Before the full matrix build, complete compile, package, runtime, and
+  representative gameplay/visual validation on the sentinel targets.
+- [ ] Expand compatibility transforms only after their sentinel behavior works.
 
 - [ ] Run `python build-smart.py matrix:compile`.
 - [ ] Run `python build-smart.py matrix:package`.
@@ -73,6 +83,8 @@ For each loader/version API generation being claimed:
   development-mapping/remapping mistakes that `runClient` cannot.
 - [ ] Exercise representative gameplay: registry entries, models/textures,
   recipes/loot, networking, and any feature touched by transforms.
+- [ ] Record results in a compact ledger with target, commit, artifact type,
+  client, server, external-launcher, and gameplay status.
 
 ## 6. Close out safely
 

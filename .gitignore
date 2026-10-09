@@ -42,3 +42,13 @@ replay_*.log
 *.hprof
 *.jfr
 /fabric/src/main/generated/.cache/
+
+# Local credentials and Python caches
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+
+# Stonecutter generated project views
+versions/
