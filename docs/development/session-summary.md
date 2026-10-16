@@ -1,9 +1,10 @@
-# Fishing Frenzy 1.2.3 release preparation
+# Fishing Frenzy 1.2.3 release
 
 Branch: `feature/minecraft-1.20.1-and-26.3`; base commit `b661f37`.
-Final publication approval was given on 2026-10-15. This revision contains the
-tested release, ready for sequential platform publication and tag `v1.2.3`.
-Publication progress is recorded in ignored `build/publishing/1.2.3-uploads.jsonl`.
+Final publication approval was given on 2026-10-15. Release commit
+`d292e26815aa8e7a8798a99c9084115f2960db36` is published and tagged `v1.2.3`.
+This documentation-only follow-up records the final distribution checks.
+The release JARs and tag remain unchanged.
 
 ## Release scope
 
@@ -78,8 +79,8 @@ GitHub tag is `v1.2.3`, on the exact approved release revision, with 16 JAR asse
 - GitHub bundle: exactly 16 installable JARs, each matching its frozen SHA-256.
 - Historical 1.2.2 pin file unchanged; SHA-256
   `59fafb5a4849cbb522370fcf0ebf9d1e4c9e43cf00eaf09dd1a08bf276198dbc`.
-- No required validation gate remains unresolved. Real publication, GitHub
-  Actions and public release verification are authorized by the final approval.
+- No required validation gate remains unresolved. Both platform uploads and
+  GitHub Actions completed successfully; all public downloadable JAR hashes match.
 
 ## Remaining manual checks
 
@@ -88,11 +89,25 @@ Fishing Real integration on 26.3. Automated startup is not a claim of full
 interactive gameplay coverage on every Minecraft version. The user has already
 confirmed the 1.20.1 bait crafting and fishing fixes in normal play.
 
-Final approval has been received. Commit only the intended
-port/stability/publication changes, push the release branch,
-publish missing nodes sequentially, then tag that exact revision and verify
-GitHub Actions and the public release’s 16 asset hashes. Do not rebuild frozen
-JARs or modify the public 1.2.2 files.
+## Publication results
+
+- Modrinth: 16/16 new 1.2.3 releases listed; filenames, sizes, SHA-1 and SHA-512
+  match the frozen inventory. GitHub's clean retrieval independently verified
+  all downloaded SHA-256 hashes. The twelve original public 1.2.2 files remain unchanged.
+- CurseForge: 16/16 uploads acknowledged with distinct file IDs. All sixteen
+  actual public CDN downloads independently match the frozen SHA-256 hashes.
+  The public project file list still showed zero new entries at the final
+  check; listing/review propagation remains outside the publisher. Do not
+  reupload acknowledged files to address that delay.
+- GitHub: [public release v1.2.3](https://github.com/Vg34100/MC-FishingFrenzy/releases/tag/v1.2.3),
+  exactly 16 installable JARs. Every server-reported asset size and SHA-256
+  matches the frozen release; the release points to the exact commit above.
+- [GitHub Actions run 38835801847](https://github.com/Vg34100/MC-FishingFrenzy/actions/runs/38835801847):
+  both retrieval/verification and public-release jobs succeeded.
+- All 32 platform receipts are preserved in ignored
+  `build/publishing/1.2.3-uploads.jsonl`. Full target IDs, URLs and hashes are
+  recorded locally in `build/publishing/1.2.3-publication-report.json` and its
+  readable Markdown companion. No release JAR was rebuilt after freezing.
 
 The pre-commit `git status --short` snapshot is local and ignored at
 `build/publishing/final-git-status.txt`. Credentials, generated JARs, worlds and
