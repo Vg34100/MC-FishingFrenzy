@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_void_salmon": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "fishingfrenzy:void_salmon"
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "fishingfrenzy:void_salmon_bait"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_void_salmon",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "fishingfrenzy:void_salmon_bait"
+    ]
+  }
+}

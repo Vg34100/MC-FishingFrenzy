@@ -1,0 +1,184 @@
+{
+  "origin": "build",
+  "mod_version": "1.2.3",
+  "modrinth_project_id": "nyk5Yv39",
+  "legacy_json_resources": [],
+  "artifacts": [
+    {
+      "target": "1.20.1-fabric",
+      "minecraft_version": "1.20.1",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-1.20.1-1.2.3.jar",
+      "size": 282059,
+      "legacy_json_count": 0,
+      "sha256": "5aed76d5960c1551fdb3397f7d65ac9c96be2abd9cbf81ad86c3180426032580",
+      "sha512": "4c4468efb269fac29fc3fc0c4b8d7bc32d2871a9bd52a37d317ff0511673e3ccb9bd41e6b75347d883a5d530c950986019c489db42faf1dec2ca52b1b351503a",
+      "sha1": "86987fc077be04932c0b25d267d6d6b2f85da3b7"
+    },
+    {
+      "target": "1.20.1-forge",
+      "minecraft_version": "1.20.1",
+      "loader": "forge",
+      "filename": "fishingfrenzy-forge-1.20.1-1.2.3.jar",
+      "size": 285877,
+      "legacy_json_count": 0,
+      "sha256": "a8216b4f6fd5f43c5c5b8f02ecffd420cc6c778129c3005e9b465dc2c868d8c5",
+      "sha512": "8cf65d256d35e8c1668255ba4030851e389eb170cf27b2198842f60bcc5ea86cb5bcd75ff3d7740a900e77d996970bf7a5e9e54026b4941f022d7c5ec8b4ebcc",
+      "sha1": "45d8021df018dd43f9008ba938e9a75eae27b006"
+    },
+    {
+      "target": "1.21-fabric",
+      "minecraft_version": "1.21",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-1.21-1.2.3.jar",
+      "size": 279265,
+      "legacy_json_count": 0,
+      "sha256": "12afb1291d53d71441ccd81223b035217217fb04ce0d7dd9e9103cd9234bd1dc",
+      "sha512": "4e8572ab724e2e352bf1f546116b2978cd7fd4f4d955114c16ed003c02bcf52a9a6eea4ae32e54ecedf34ebfaf34f9a832bbefa81c6c4b6884191a20f1723617",
+      "sha1": "a949df6414ee62caa3362f35d41281a3b4a46071"
+    },
+    {
+      "target": "1.21-neoforge",
+      "minecraft_version": "1.21",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-1.21-1.2.3.jar",
+      "size": 287412,
+      "legacy_json_count": 0,
+      "sha256": "a9653ee7e5bbc3d1c76d207efa4f941ade4ce42f7fc1f4f419388b21f601bcc7",
+      "sha512": "bf6f904f32dc6fc872e9c52275873df38420918f9a1887a465c19485a2437592e8023b499c6a8f06b2e85e98a02bf929ec3bd67d63365cf0f51846fccacb6f92",
+      "sha1": "e2d503a60565cc40b5f5d2a30ddc95491512ad8a"
+    },
+    {
+      "target": "1.21.1-fabric",
+      "minecraft_version": "1.21.1",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-1.21.1-1.2.3.jar",
+      "size": 279269,
+      "legacy_json_count": 0,
+      "sha256": "c268da57db8aee48f4a57a939bc874189d295d0e0123922c04da6fe6f3f9ef38",
+      "sha512": "800d11e696b231a83dc8f9db82eadec035950433fcf7265f7fb63799afd175bb3ec8d6cd3e100e4fc7ba876be7c831fde647772a4ea2af6977c744d0ac4f0f44",
+      "sha1": "fbe0d002f9746460387dfa3f73ab88871f645829"
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "minecraft_version": "1.21.1",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-1.21.1-1.2.3.jar",
+      "size": 287416,
+      "legacy_json_count": 0,
+      "sha256": "af067aa3ef9b299c8df4d63bcc5ca326a2c08e9cc0f464186efb055a91ee238a",
+      "sha512": "8f734bd6ca11a3ef99b24ed59d269a35c899b016c59102ee2e5c02e4f35015e02fe5c03d95d6d16f6c3eea3d73598941e783f38065aae718f99c4e359cf0c1b3",
+      "sha1": "825e0b22085dca6f9ce672bdaf076b7784ad861e"
+    },
+    {
+      "target": "26.1-fabric",
+      "minecraft_version": "26.1",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-26.1-1.2.3.jar",
+      "size": 311368,
+      "legacy_json_count": 0,
+      "sha256": "ac6c61b8d7a7a77be29d9b3234a88e9f3571a5d3ae3d28f1f3509b75c6c6efb7",
+      "sha512": "0ee91468962559cefa55f485402795320bab6d486f3ab10c02ba74a28253396bb1f80a1022427db022f537aa638efb19c9f73cd32f10ec7fd6dcdfd14b9b30fc",
+      "sha1": "178ecd55a13bbe3abf2cfb8cfe86d608abb9613c"
+    },
+    {
+      "target": "26.1-neoforge",
+      "minecraft_version": "26.1",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-26.1-1.2.3.jar",
+      "size": 303933,
+      "legacy_json_count": 0,
+      "sha256": "0bb31d97b325dfd3e709530618b553223f9fb35b68861c9c490b9b7b95f2fd36",
+      "sha512": "595c1fba5f8dae13b5a123b2a7f884613b7acc1d013209010883019bc472f920bff8403ad3996410555c02f491031505eedf6a1a892d427314d94de4f2ac48a8",
+      "sha1": "106b8b2f92e4fc6df6e31c8fe2bd37ed44198bf0"
+    },
+    {
+      "target": "26.1.1-fabric",
+      "minecraft_version": "26.1.1",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-26.1.1-1.2.3.jar",
+      "size": 311372,
+      "legacy_json_count": 0,
+      "sha256": "4a2b0dee5fa84ac4fd7b343128ad6ce056d1bd4af11201a87ead9383e4693e9d",
+      "sha512": "8629a7bec610e7a9bf36d82397cb400d0cecb3815e57147fe50688647c7fcbc0927766dea7cd345afe774ee0703ebedd8d150d83553df872dd0472262be78c48",
+      "sha1": "135ccfa85017892fad54aed319cfc1c7b22984ba"
+    },
+    {
+      "target": "26.1.1-neoforge",
+      "minecraft_version": "26.1.1",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-26.1.1-1.2.3.jar",
+      "size": 303932,
+      "legacy_json_count": 0,
+      "sha256": "5c0096f91f6d1178662bd3efba17c57192fd8956681e13fe7be6555e15cedb6c",
+      "sha512": "aa2fbc26f8b3bd2bdb797bccac5bca8d765d2277f4bddfb38ade330d6072f19aea469867bafbe795f49168791272a1b377987234edd6624801a9af4b482ad657",
+      "sha1": "7931c91e504b810039f27abb12c8fd10836bc465"
+    },
+    {
+      "target": "26.1.2-fabric",
+      "minecraft_version": "26.1.2",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-26.1.2-1.2.3.jar",
+      "size": 311373,
+      "legacy_json_count": 0,
+      "sha256": "6f6351df5c06176d0662103429ee64efae5415712dbe78d6c7590b2af8164ee1",
+      "sha512": "95b8bd61699e18518e0a6b4e5f016ef7861203f7fd5064dd38c47b6c1b495ce7b46bd654e8c77501dc3e8bfadc55acccfd05b1aeda037a22590220b34bfa31c7",
+      "sha1": "366a880b2eeefd6683101244c6b66a09a7f56cad"
+    },
+    {
+      "target": "26.1.2-neoforge",
+      "minecraft_version": "26.1.2",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-26.1.2-1.2.3.jar",
+      "size": 303931,
+      "legacy_json_count": 0,
+      "sha256": "e2b03e1a90048f9af579d122f1665523d0537a975cb317eee1e0fbdfc1f3ac4e",
+      "sha512": "5c2e66efc86f0057fa76b80a261add87d84395d4abd13bc6268ceb73d1e815c86e2bbd195db993210dba41d5182fb34212a21d9b5e7eeb60eed4710d427f7503",
+      "sha1": "6a3a42ef618fa5360eabe2da5bd6a13ec9295901"
+    },
+    {
+      "target": "26.2-fabric",
+      "minecraft_version": "26.2",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-26.2-1.2.3.jar",
+      "size": 311588,
+      "legacy_json_count": 0,
+      "sha256": "574dc931ee0aca3586b73cadeea3aeccc6fa7576dcd3e71878f5a1bc6543b118",
+      "sha512": "6a9f411b12025d690e53ac37c96d62526b56f957ef7a8733be01c64585ab20df2cbecfdcafcb62f5cbb4e4ae976c7af5b3d47b5ae050069419f5bee4e95a195f",
+      "sha1": "74dab620ed5aa0a473648b3a8f4dd51eeb14c3b1"
+    },
+    {
+      "target": "26.2-neoforge",
+      "minecraft_version": "26.2",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-26.2-1.2.3.jar",
+      "size": 303936,
+      "legacy_json_count": 0,
+      "sha256": "7e6d0ae0ac4ad968f598d2ecfac1a1bebbaebe7cb6662ed04e9a636fd3d05cac",
+      "sha512": "0417fa92bb3c0fd1e8feb2f623260615c2ef7479ecad8478e2d8dd9593204f0747f43b9d5ef94bcc0248cdf995f368cb67b59cdbf73821087fe2fa150b0de4e4",
+      "sha1": "459a0086a95083a952ec37a1d95009fcd527b606"
+    },
+    {
+      "target": "26.3-fabric",
+      "minecraft_version": "26.3",
+      "loader": "fabric",
+      "filename": "fishingfrenzy-fabric-26.3-1.2.3.jar",
+      "size": 312010,
+      "legacy_json_count": 0,
+      "sha256": "af36e16b16cbb8f28ed5fbc4b422d46bf5c5dd92ac891ed864389b1fab9af645",
+      "sha512": "6acc6b48f643b5a12a4773d9a7766f20788db17d4f8753edf0f2ffae4516f5ae29966aa19054bc1f9e91225e19dd739f0957589919409419fb0dd988fb934e91",
+      "sha1": "9f3f881b5fec02aea49099ebe7bcb2553ced7722"
+    },
+    {
+      "target": "26.3-neoforge",
+      "minecraft_version": "26.3",
+      "loader": "neoforge",
+      "filename": "fishingfrenzy-neoforge-26.3-1.2.3.jar",
+      "size": 304186,
+      "legacy_json_count": 0,
+      "sha256": "b1abe2e8158eb27c91368c998ec009524066c36187a4ac0ebb499f020ebcae81",
+      "sha512": "346778b4614c21c84b8af743c130f70ddc42b4cd8236d68910d9b6d79e1936c716cf9ff3bd2a95bc2faf13c41f5ca4bc6d5247259d7328f64017edef2353fc84",
+      "sha1": "2d7b1dd5bbbe8ec34e50e0025e79fe8d5fac5613"
+    }
+  ]
+}

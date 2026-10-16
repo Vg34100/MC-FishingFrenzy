@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Small stdlib-only regression tests for publication safety; no real secrets/API writes."""
 import os
+import json
 from pathlib import Path
 import runpy
 import subprocess
@@ -44,12 +45,12 @@ class PublishingSafety(unittest.TestCase):
             data = PUBLISH["publication_plan"]()
         self.assertEqual({r["target"] for r in data["entries"]}, {p.stem for p in (ROOT / 'gradle/matrix').glob('*.properties')})
         self.assertEqual(len({r['version_number'] for r in data['entries']}), len(data['entries']))
-        self.assertEqual(len(data['entries']), 12)
+        self.assertEqual(len(data['entries']), len(list((ROOT / 'gradle/matrix').glob('*.properties'))))
         self.assertEqual(data['project_id'], 'nyk5Yv39')
         self.assertEqual(data['curseforge_project_id'], '1126443')
         self.assertEqual(data['modrinth_environments'], dict(client_side='required', server_side='required'))
         for row in data['entries']:
-            loader = {'fabric': 'Fabric', 'neoforge': 'NeoForge'}[row['loader']]
+            loader = {'fabric': 'Fabric', 'neoforge': 'NeoForge', 'forge': 'Forge'}[row['loader']]
             self.assertEqual(row['version_name'], f"[{loader}] Fishing Frenzy {data['mod_version']} ({row['minecraft']})")
             self.assertEqual(row['version_number'], f"{data['mod_version']}-{row['minecraft']}-{row['loader']}")
             self.assertEqual(row['artifact'], f"build/libs/{row['target']}/fishingfrenzy-{row['loader']}-{row['minecraft']}-{data['mod_version']}.jar")
@@ -113,7 +114,7 @@ class PublishingSafety(unittest.TestCase):
                         name='Fishing Frenzy ' + data['mod_version'], game_versions=['26.2'], loaders=['fabric'])
         with self.assertRaisesRegex(ValueError, 'Existing Modrinth'):
             PUBLISH['check_duplicates'](data, [existing])
-        for change in ({'name': 'Fishing Frenzy ' + data['mod_version'] + '0'}, {'loaders': ['quilt']}, {'game_versions': ['1.20.1']}):
+        for change in ({'name': 'Fishing Frenzy ' + data['mod_version'] + '0'}, {'loaders': ['quilt']}, {'game_versions': ['not-a-target']}):
             PUBLISH['check_duplicates'](data, [dict(existing, **change)])
         file = dict(id=1, name='fishingfrenzy-' + data['mod_version'] + '-v26.2-fabric.jar', versions=['26.2', 'Fabric'])
         with self.assertRaisesRegex(ValueError, 'Existing CurseForge'):
@@ -144,15 +145,44 @@ class PublishingSafety(unittest.TestCase):
         project = WRAPPER['Project'](ROOT)
         kind, targets = WRAPPER['plan'](project, 'release-smoke')
         self.assertEqual(kind, 'release-clients')
-        self.assertEqual([t.name for t in targets], ['26.2-fabric', '26.2-neoforge', '1.21.1-fabric', '1.21.1-neoforge'])
-        self.assertEqual([t.java for t in targets], [25, 25, 21, 21])
+        versions = PUBLISH['properties'](ROOT / 'gradle/publishing.properties')['release_smoke_versions'].split(',')
+        self.assertEqual({t.name for t in targets}, {t.name for t in project.targets if t.version in versions})
+        self.assertEqual({t.version for t in targets}, set(versions))
+        self.assertEqual({t.java for t in targets}, {17, 21, 25})
 
     def test_unmapped_metadata_and_wrong_mod_namespace_fail(self):
         config = PUBLISH['properties'](ROOT / 'gradle/publishing.properties')
         with self.assertRaisesRegex(ValueError, 'Unmapped'):
             PUBLISH['dependencies']('{"depends":{"unexpected-mod":"*"}}', 'fabric', {}, config)
-        with self.assertRaisesRegex(ValueError, 'Missing NeoForge dependency'):
+        with self.assertRaisesRegex(ValueError, 'Missing loader dependency'):
             PUBLISH['dependencies']('[[dependencies.unrelated]]\nmodId="architectury"\ntype="required"\n', 'neoforge', {}, config)
+
+    def test_forge_requirements_and_loader_duplicates_are_distinct(self):
+        data = PUBLISH['publication_plan']()
+        row = next(r for r in data['entries'] if r['loader'] == 'forge')
+        config = PUBLISH['properties'](ROOT / 'gradle/publishing.properties')
+        metadata = '[[dependencies.fishingfrenzy]]\nmodId="architectury"\nmandatory=true\n'
+        self.assertEqual(PUBLISH['dependencies'](metadata, 'forge', {}, config)[0]['dependency_type'], 'required')
+        self.assertEqual(PUBLISH['dependencies'](metadata.replace('true', 'false'), 'forge', {}, config)[0]['dependency_type'], 'optional')
+        with self.assertRaisesRegex(ValueError, 'Missing Forge dependency requirement'):
+            PUBLISH['dependencies'](metadata.replace('mandatory=true', 'type="required"'), 'forge', {}, config)
+        file = dict(id=1, name=Path(row['artifact']).name, versions=[row['minecraft'], 'Forge'])
+        self.assertEqual(PUBLISH['curseforge_matches'](data, dict(id=1126443, files=[file])), {row['target']: ['1']})
+        self.assertEqual(PUBLISH['curseforge_matches'](data, dict(id=1126443, files=[dict(file, versions=[row['minecraft'], 'NeoForge'])])), {})
+
+    def test_added_targets_cannot_use_the_frozen_release_inventory(self):
+        canonical = runpy.run_path(str(ROOT / 'scripts/canonical-artifacts.py'))
+        historical = json.loads((ROOT / 'gradle/canonical/1.2.2.json').read_text())
+        released = {r['target'] for r in historical['artifacts']}
+        registered = {p.stem for p in (ROOT / 'gradle/matrix').glob('*.properties')}
+        self.assertLess(released, registered)
+        for target in registered - released:
+            with patch.dict(canonical['record'].__globals__, inventory=lambda root: historical):
+                with self.assertRaisesRegex(ValueError, 'prepare new release pins'):
+                    canonical['record'](target)
+            kind, selected = WRAPPER['plan'](WRAPPER['Project'](ROOT), 'smoke-release-client:' + target)
+            self.assertEqual(kind, 'release-client')
+            self.assertEqual([t.name for t in selected], [target])
 
     def test_cli_overrides_cannot_bypass_confirmation_or_debug_mode(self):
         project = WRAPPER['Project'](ROOT)
@@ -244,7 +274,7 @@ class PublishingSafety(unittest.TestCase):
         import hashlib
         canonical = runpy.run_path(str(ROOT / 'scripts/canonical-artifacts.py'))
         verifier = runpy.run_path(str(ROOT / 'scripts/verify-matrix-artifacts.py'))
-        inventory = canonical['inventory']()
+        inventory = json.loads((ROOT / 'gradle/canonical/1.2.2.json').read_text())
         self.assertEqual(len(inventory['artifacts']), 12)
         self.assertEqual(sum(r['legacy_json_count'] > 0 for r in inventory['artifacts']), 4)
         self.assertEqual(len(inventory['legacy_json_resources']), 68)
@@ -263,6 +293,50 @@ class PublishingSafety(unittest.TestCase):
         canonical['verify_bytes'](payload, row)
         with self.assertRaisesRegex(ValueError, 'hash/size mismatch'):
             canonical['verify_bytes'](payload + b'x', row)
+
+    def test_fresh_release_pins_are_immutable_and_public_retrieval_checks_hashes(self):
+        import io
+        canonical = runpy.run_path(str(ROOT / 'scripts/canonical-artifacts.py'))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'gradle/matrix').mkdir(parents=True)
+            (root / 'gradle.properties').write_text('mod_version=1.2.3\narchives_name=fishingfrenzy\n')
+            (root / 'gradle/publishing.properties').write_text(
+                'modrinth_project_id=nyk5Yv39\ncanonical_artifacts_file=gradle/canonical/1.2.3.json\n'
+                'version_number={mod_version}-{minecraft_version}-{loader}\n')
+            (root / 'gradle/matrix/1.20.1-forge.properties').write_text('minecraft_version=1.20.1\nloader=forge\n')
+            jar = root / 'build/libs/1.20.1-forge/fishingfrenzy-forge-1.20.1-1.2.3.jar'
+            jar.parent.mkdir(parents=True)
+            jar.write_bytes(b'verified test release bytes')
+            with patch('builtins.print'):
+                canonical['freeze'](root)
+                with self.assertRaisesRegex(ValueError, 'overwrite frozen'):
+                    canonical['freeze'](root)
+                data = canonical['inventory'](root)
+                self.assertEqual(data['origin'], 'build')
+                self.assertEqual(data['legacy_json_resources'], [])
+                with patch('urllib.request.urlopen', side_effect=AssertionError('local preflight must not require unpublished files')):
+                    canonical['fetch'](root)
+                row = data['artifacts'][0]
+                url = 'https://cdn.modrinth.com/data/nyk5Yv39/versions/test/' + row['filename']
+                remote = dict(id='test', project_id='nyk5Yv39', version_number='1.2.3-1.20.1-forge',
+                              game_versions=['1.20.1'], loaders=['forge'], files=[dict(primary=True,
+                              filename=row['filename'], url=url, size=row['size'],
+                              hashes={a: row[a] for a in ('sha1', 'sha512')})])
+                payload = jar.read_bytes()
+                jar.unlink()
+                remote['files'][0]['hashes']['sha512'] = '0' * 128
+                with patch('urllib.request.urlopen', return_value=io.BytesIO(json.dumps([remote]).encode())):
+                    with self.assertRaisesRegex(ValueError, 'Public canonical file changed'):
+                        canonical['fetch'](root, public=True)
+                self.assertFalse(jar.exists())
+                remote['files'][0]['hashes']['sha512'] = row['sha512']
+                with patch('urllib.request.urlopen', side_effect=[io.BytesIO(json.dumps([remote]).encode()), io.BytesIO(payload)]):
+                    canonical['fetch'](root, public=True)
+                canonical['verify'](jar, '1.20.1-forge', root)
+                jar.write_bytes(payload + b'changed')
+                with self.assertRaisesRegex(ValueError, 'hash/size mismatch'):
+                    canonical['fetch'](root)
 
     def test_github_uploaded_hashes_and_exact_asset_set_gate_publication(self):
         import copy
@@ -325,7 +399,7 @@ class PublishingSafety(unittest.TestCase):
             with patch.dict(PUBLISH['collect'].__globals__, replacements), patch.dict(os.environ, {}, clear=True), patch('builtins.print'):
                 PUBLISH['collect']()
                 bundle = root / 'build/publishing/github-assets'
-                self.assertEqual(len(list(bundle.glob('*.jar'))), 12)
+                self.assertEqual(len(list(bundle.glob('*.jar'))), len(data['entries']))
                 PUBLISH['restore'](bundle)
                 extra = bundle / 'unexpected-dev.jar'
                 extra.touch()

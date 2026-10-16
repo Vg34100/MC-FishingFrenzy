@@ -16,12 +16,12 @@ Usage:
     python build-smart.py smoke-server:<target>   # start a dedicated server, wait for Done, stop it
     python build-smart.py smoke-release-client:<target>
                                                   # verify, launch the canonical release jar
-    python build-smart.py release-smoke            # four representative production clients, sequentially
+    python build-smart.py release-smoke            # configured production sentinels, sequentially
     python build-smart.py publish:plan             # read-only target/artifact publication plan
     python build-smart.py publish:modrinth-dry-run  # Minotaur debug mode; never uploads
     python build-smart.py publish:curseforge-dry-run # CurseForgeGradle debug mode; never uploads
     python build-smart.py publish:all-dry-run      # both platforms, all matrix nodes
-    python build-smart.py publish:preflight        # retrieve canonical jars, verify, smoke, both dry-runs
+    python build-smart.py publish:preflight        # verify frozen jars, smoke, both dry-runs
     python build-smart.py publish:modrinth --confirm # REAL uploads; explicit confirmation required
     python build-smart.py publish:curseforge --confirm # REAL uploads; explicit confirmation required
     python build-smart.py publish:all --confirm    # REAL sequential uploads, resumable API receipts
@@ -134,7 +134,7 @@ BENIGN_RUNTIME_ERRORS = (
 
 ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;?]*[ -/]*[@-~]')
 KNOWN_LOADERS = ("fabric", "neoforge", "forge", "quilt")
-WRAPPER_FLAGS = ("--print-plan",)
+WRAPPER_FLAGS = ("--print-plan", "--built-artifacts")
 
 
 def find_project_root():
@@ -592,6 +592,7 @@ def run_server_smoke(project, run_task, extra_args, java_home):
     process = popen(cmd, project.root, subprocess.PIPE, isolate=True)
     lines = []
     ready = stopping = eula = timed_out = False
+    startup_error = None
     started = time.monotonic()
     stop_sent_at = None
 
@@ -605,6 +606,12 @@ def run_server_smoke(project, run_task, extra_args, java_home):
                 show_runtime(plain)
                 eula = eula or bool(EULA_PROMPT.search(plain))
                 stopping = stopping or (ready and bool(SERVER_STOPPING.search(plain)))
+                if not ready and any(message in plain for message in (
+                        'Failed to load registries due to errors', 'Mixin apply failed',
+                        'InvalidMixinException', 'Exception in thread')):
+                    startup_error = plain
+                    kill_tree(process)
+                    break
                 if not ready and SERVER_READY.search(plain):
                     ready = True
                     try:
@@ -632,13 +639,25 @@ def run_server_smoke(project, run_task, extra_args, java_home):
             pass
 
     return_code = process.returncode
+    legacy_fish_names = set()
+    if run_task.startswith(':1.20.1-'):
+        # Vanilla's DFU schema check logs one warning per custom
+        # fish; no vanilla migration schema exists for newly registered mod types.
+        models = project.root / 'common/src/main/java/net/vg/fishingfrenzy/registry/DynamicFishSystem.java'
+        legacy_fish_names = set(re.findall(r'Map\.entry\("([a-z0-9_]+)"', models.read_text(encoding='utf-8')))
+    def known_schema_check(line):
+        match = re.search(r'No data fixer registered for ([a-z0-9_]+)\s*$', line)
+        return bool(match and match[1] in legacy_fish_names)
     unexpected = [
         line for line in lines
         if ("/ERROR]" in line or "Exception in thread" in line)
         and not any(benign in line for benign in BENIGN_RUNTIME_ERRORS)
+        and not known_schema_check(line)
     ]
 
-    if timed_out == "ready":
+    if startup_error:
+        reason = 'fatal startup failure: ' + startup_error
+    elif timed_out == "ready":
         reason = f"server did not reach Done within {ready_timeout:.0f}s"
     elif timed_out == "stop":
         reason = f"server did not exit within {stop_timeout:.0f}s of `stop`"
@@ -803,9 +822,9 @@ def plan(project, task_arg):
 
     if task_arg.startswith("smoke-release-client:"):
         name = task_arg.split(":", 1)[1]
-        selected = [t for t in project.targets if t.name == name and t.loader in ("fabric", "neoforge")]
+        selected = [t for t in project.targets if t.name == name and t.loader in ("fabric", "neoforge", "forge")]
         if not selected:
-            raise PlanError("Packaged client smoke needs an exact registered Fabric/NeoForge target")
+            raise PlanError("Packaged client smoke needs an exact registered loader target")
         return "release-client", selected
 
     if task_arg == "release-smoke":
@@ -874,6 +893,7 @@ def main(argv=None):
         print(__doc__)
         return 0
     print_plan = "--print-plan" in argv
+    built_artifacts = "--built-artifacts" in argv
     argv = [arg for arg in argv if arg not in WRAPPER_FLAGS]
 
     task_arg = argv[0] if argv else "compile"
@@ -907,7 +927,9 @@ def main(argv=None):
     if kind == "release-clients":
         print("Representative release smokes (sequential): " + ", ".join(t.name for t in tasks))
         for target in tasks:
-            code = main([f"smoke-release-client:{target.name}"] + extra_args + (["--print-plan"] if print_plan else []))
+            code = main([f"smoke-release-client:{target.name}"] + extra_args
+                        + (["--print-plan"] if print_plan else [])
+                        + (["--built-artifacts"] if built_artifacts else []))
             if code:
                 return code
         if not print_plan:
@@ -929,16 +951,18 @@ def main(argv=None):
         neoforge = None
         production = read_properties(project.root / "gradle/publishing.properties")
         runtime_key = f"release_smoke.{target.name}."
-        if target.loader == "neoforge" or target.legacy or production.get(runtime_key + "launcher") == "portablemc":
+        if target.loader in ("neoforge", "forge") or target.legacy or production.get(runtime_key + "launcher") == "portablemc":
             try:
                 run_dir, native_root, executable = smoke["neoforge_paths"](target.name, log_dir.name)
             except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-                print(f"ERROR: NeoForge production launcher prerequisites: {error}")
+                print(f"ERROR: production launcher prerequisites: {error}")
                 return 2
-            loader_key = "neoforge_version" if target.loader == "neoforge" else "fabric_loader_version"
-            runtime_loader = production.get(runtime_key + loader_key, target.props[loader_key])
+            loader_key = {"neoforge": "neoforge_version", "forge": "forge_version", "fabric": "fabric_loader_version"}[target.loader]
+            runtime_loader = target.props[loader_key] if built_artifacts else production.get(runtime_key + loader_key, target.props[loader_key])
             neoforge = (native_root, executable, runtime_loader, target.loader, target.version)
         client_tasks = [f":{target.name}:runReleaseClient", f"-Prelease_smoke_dir={run_dir}"] + extra_args
+        if built_artifacts:
+            client_tasks.append('-Prelease_smoke_built=true')
         if neoforge:
             client_tasks[0] = f":{target.name}:stageReleaseClient"
 
@@ -952,9 +976,10 @@ def main(argv=None):
             print("Platforms: " + ", ".join(project.platforms))
         if kind == "release-client":
             print(f"Release smoke: {target.name}\n  Packaged JAR: {artifact}\n  Game Java: {target.java}")
-            mechanism = f"PortableMC {smoke['PORTABLEMC_VERSION']} Windows, managed Java" if neoforge else "Loom ClientProductionRunTask"
+            launcher_version = smoke['PORTABLEMC_VERSION']
+            mechanism = f"PortableMC {launcher_version}, managed Java" if neoforge else "Loom ClientProductionRunTask"
             print(f"  Production mechanism: {mechanism}\n  Isolated directory: {run_dir}")
-            print("  Artifact: pinned public Modrinth bytes; no rebuild")
+            print("  Artifact: local build" if built_artifacts else "  Artifact: frozen release bytes; no rebuild")
             print(("  Stage: " if neoforge else "  Launch: ") + " ".join(gradle_command(project, client_tasks, java_home)))
             if neoforge:
                 print("  Launch: " + " ".join(smoke["neoforge_command"](executable, native_root, neoforge[2], target.legacy, target.loader, target.version)))
@@ -972,7 +997,7 @@ def main(argv=None):
     if kind == "release-client":
         verifier = runpy.run_path(str(project.root / "scripts/verify-matrix-artifacts.py"))
         try:
-            artifact = verifier["inspect"](project.root / "gradle/matrix" / (target.name + ".properties"))
+            artifact = verifier["inspect"](project.root / "gradle/matrix" / (target.name + ".properties"), require_canonical=not built_artifacts)
         except (AssertionError, ValueError, OSError) as error:
             print(f"FAIL: release artifact verification: {error}")
             return 1

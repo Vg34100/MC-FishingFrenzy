@@ -2,7 +2,7 @@
 
 ## Goal
 
-One source release, one exact 12-node publication plan, safe platform uploads, and one GitHub Release containing only installable matrix JARs.
+One source release, a publication plan discovered from the matrix, safe platform uploads, and one GitHub Release containing only installable matrix JARs.
 
 ## Source of Truth
 
@@ -91,7 +91,7 @@ python build-smart.py publish:preflight
 Expected:
 
 ```text
-canonical Modrinth artifact retrieval
+frozen artifact hash verification (public retrieval for historical releases)
 → verifier
 → representative release smoke
 → both platform dry-runs
@@ -147,7 +147,7 @@ Describe user-relevant version/loader support and actual feature changes only.
 `gradle/canonical/1.2.2.json` records all 12 official Modrinth version IDs, exact
 Minecraft/loader targets, filenames, download URLs, sizes and SHA-256/SHA-512/SHA-1
 hashes. The audit checked both hashes advertised by Modrinth before computing
-SHA-256. Retrieve with `python scripts/canonical-artifacts.py`. Publication,
+SHA-256. When that historical release is selected, retrieve with `python scripts/canonical-artifacts.py --public`. Publication,
 production staging and GitHub collection verify those same bytes; none rebuilds
 them. Modrinth 1.2.2 is read-only in this pipeline.
 
@@ -163,7 +163,7 @@ Minecraft 1.21.1's `GsonHelper` reads one JSON value through `TypeAdapter.read`
 without checking end-of-input, so those trailing bytes are tolerated on the
 verified resource paths. Fabric and NeoForge `runClient` were manually verified;
 the packaged release smoke independently stages the canonical installable JAR.
-The legacy transform correction is deferred to a future mod version.
+Fresh builds use a real newline; no historical public bytes are changed.
 
 Production smoke stages only the canonical mod and its public required mods;
 it never adds a standalone MixinExtras library. Current public 26.2 Fabric
@@ -184,3 +184,30 @@ contained a standalone MixinExtras JAR. The prior 1.21.1 passes remain
 valid because they already used only ordinary required dependencies.
 Loader 0.19.4 with older Fabric dependencies remains a known failing
 combination; release notes direct 26.2 Fabric users to Loader >=0.19.5.
+
+## Fresh releases after 1.2.2
+
+Select an unused version in `gradle.properties`, add its release notes, and set
+`canonical_artifacts_file` to a new versioned JSON path. Keep every older pin
+file unchanged. Compile, package and strictly verify the complete discovered
+matrix, then run `python scripts/canonical-artifacts.py --freeze` once.
+This exclusively creates the new SHA-256/SHA-512/SHA-1 inventory; existing
+inventories cannot be overwritten. Fresh releases allow no legacy JSON exception.
+
+Local preflight verifies these frozen local bytes without requiring unpublished
+Modrinth files. Real uploads use those same bytes, with semantic duplicate
+guards, sequential tasks and durable receipts. Historical inventories without
+`origin: build` remain read-only on Modrinth.
+
+GitHub uses `python scripts/canonical-artifacts.py --public`: it matches each
+exact version/Minecraft/loader on official Modrinth, checks filename, size and
+advertised hashes, then verifies downloaded SHA-256 against the committed pins.
+It fails if any target is missing, ambiguous or changed. It never builds a
+replacement JAR. The GitHub Release contains only the installable JARs.
+
+The 1.2.3 release has 16 targets. Its production sentinel versions are 1.20.1,
+1.21.1, 26.2 and 26.3, with every registered loader for those versions.
+The 26.3 Fabric production selector uses PortableMC and Mojang-managed Java,
+like the other production selectors, after a native Windows fault under the
+host development JDK. No extra mod dependency or changed release JAR is used.
+Final user approval is required before the first real upload for this release.

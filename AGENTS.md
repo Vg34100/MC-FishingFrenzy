@@ -21,12 +21,14 @@ Detailed reusable procedures live under `docs/development/`.
 The current suite matrix is:
 
 ```text
+1.20.1    Fabric / Forge
 1.21      Fabric / NeoForge
 1.21.1    Fabric / NeoForge
 26.1      Fabric / NeoForge
 26.1.1    Fabric / NeoForge
 26.1.2    Fabric / NeoForge
 26.2      Fabric / NeoForge
+26.3      Fabric / NeoForge
 ```
 
 When this matrix exists, discover registered targets from:
@@ -48,6 +50,7 @@ build.matrix.gradle
 gradle/matrix/*.properties
 common/
 fabric/
+forge/
 neoforge/
 ```
 
@@ -138,6 +141,9 @@ Default representative compatibility shapes:
 1.21.1 Fabric
 1.21.1 NeoForge
 ```
+
+For the 1.20.1/26.3 port, also cover both 26.3 loaders and 1.20.1 Fabric/Forge.
+Use Java 17, 21 and 25 toolchains according to the discovered target pins.
 
 Add another sentinel only for a genuinely unique boundary.
 

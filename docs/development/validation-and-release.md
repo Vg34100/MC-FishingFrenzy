@@ -24,6 +24,26 @@ Use `scripts/verify-matrix-artifacts.py` to prove release-JAR structure.
 
 Use `runClient` / targeted server checks for actual gameplay/UI/mixin behavior.
 
+For 1.20.1 fish/rod changes, run `python tests/gameplay/run.py`. This opt-in
+Minecraft GameTest suite uses fresh worlds on Fabric and Forge: every fish's
+spawn egg on land, water-bucket capture/release with saved data, baby-state
+save/load and breeding, fish-to-bait crafting, and rod bait storage/casting.
+It discovers fish names from the shared registry and rejects crashes, zero
+tests, incomplete coverage and failed cases. Test classes and metadata stay
+outside installable JARs. Use `--targets 1.20.1-fabric` or
+`--targets 1.20.1-forge` for an affected sentinel; Gradle options follow `--`.
+
+For fishing-speed/bait changes, use `python tests/gameplay/run.py --bait-timers`.
+This focused mode advances actual hooks to bites, reels in loot and checks bait
+consumption for every registered bait and an unbaited rod, with Lure 0 and III.
+It leaves the existing fish/egg/bucket suite separate. Use `--cases <name>` to rerun only a failed case.
+The stability cases also check actual aging and cooldown completion, saved feeding
+growth, synchronized baby flags, configured food/species checks, clock/weather/
+water gates, two-result catches, bait metadata and caught-fish statistics.
+
+Startup alone does not establish gameplay correctness. These world tests use
+development classes; keep packaged-JAR origin checks as a separate gate.
+
 ### 5. Packaged-JAR Production Smoke
 
 Use the exact installable release JAR in an isolated runtime.
@@ -47,6 +67,11 @@ This should prove:
 
 Add another target only for a genuinely unique boundary.
 
+The 1.20.1/26.3 extension additionally validates 26.3 Fabric/NeoForge and 1.20.1
+Fabric/Forge. See `minecraft-1.20.1-and-26.3-port.md` for the port's evidence and
+manual gameplay checklist. Use `--built-artifacts` for packaged smoke of local
+compatibility builds; ordinary publishing continues to require canonical pins.
+
 ## Full Matrix Acceptance
 
 After sentinel stability:
@@ -65,7 +90,7 @@ Do not repeat after no-op/documentation-only work.
 
 Derive a short checklist from the mod's actual features.
 
-Do not manually test all 12 clients unless 12 distinct runtime mechanisms truly exist.
+Use representative clients unless a distinct runtime mechanism requires another target.
 
 ## Release Preflight
 

@@ -29,7 +29,9 @@ def javaVersion = matrix.getProperty('java_version', '25') as int
 def usesLegacyLoom = matrix.getProperty('loom_generation', 'current') == 'legacy'
 def isFabric = loader == 'fabric'
 def isNeoForge = loader == 'neoforge'
-if (!isFabric && !isNeoForge) {
+def isForge = loader == 'forge'
+def is120 = matrixValue('minecraft_version') == '1.20.1'
+if (!isFabric && !isNeoForge && !isForge) {
     throw new GradleException("Unsupported matrix loader '${loader}' for ${project.path}")
 }
 group = rootProject.maven_group
@@ -55,6 +57,12 @@ if (!usesLegacyLoom) {
         // root Architectury configuration.  This must be set before selecting a
         // loader so Loom constructs the matching game/provider pipeline.
         minecraft = matrixValue('minecraft_version')
+        if (matrixValue('minecraft_version') == '26.3') {
+            // Standalone nodes contain native loader code and no @ExpectPlatform
+            // stubs. Avoid the unnecessary runtime transformer and its lingering
+            // non-daemon workers after a dedicated server has stopped.
+            compileOnly()
+        }
         platformSetupLoomIde()
         if (isFabric) {
             fabric()
@@ -71,7 +79,7 @@ if (usesLegacyLoom) {
 
     tasks.register('verifyLegacyRuntime') {
         group = 'verification'
-        description = 'Verifies that legacy game launch tasks use the Java 21 toolchain.'
+        description = "Verifies that legacy game launch tasks use the Java ${javaVersion} toolchain."
         doLast {
             def runTasks = tasks.withType(JavaExec).findAll {
                 it.name.equalsIgnoreCase('runClient') || it.name.equalsIgnoreCase('runServer')
@@ -99,6 +107,17 @@ if (isNeoForge) {
     }
 }
 
+if (isForge) {
+    if (!usesLegacyLoom || !is120 || javaVersion != 17) {
+        throw new GradleException('Forge is currently supported only for the Java 17 / 1.20.1 target')
+    }
+    loom {
+        forge {
+            mixinConfig 'fishingfrenzy.mixins.json'
+        }
+    }
+}
+
 // Mirror the configuration shape Architectury's normal NeoForge module uses.  The
 // version nodes are standalone projects, so they do not inherit this from the
 // original loader subproject.
@@ -117,7 +136,7 @@ if (isNeoForge) {
 sourceSets {
     main {
         java {
-            if (matrixValue('minecraft_version') == '26.2' || usesLegacyLoom) {
+            if (matrixValue('minecraft_version') in ['26.2', '26.3'] || usesLegacyLoom) {
                 setSrcDirs([
                         layout.buildDirectory.dir('matrix-sources/common').get().asFile,
                         layout.buildDirectory.dir("matrix-sources/${loader}").get().asFile
@@ -140,7 +159,9 @@ sourceSets {
                 ])
             } else {
                 setSrcDirs([
-                        rootProject.file('common/src/main/resources'),
+                        matrixValue('minecraft_version') == '26.3'
+                                ? layout.buildDirectory.dir('matrix-resources/common').get().asFile
+                                : rootProject.file('common/src/main/resources'),
                         rootProject.file("${loader}/src/main/resources")
                 ])
             }
@@ -195,7 +216,7 @@ if (usesLegacyLoom) {
                                     }
                                 }
                             }
-                            recipeFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(recipe)) + '\\n', 'UTF-8')
+                            recipeFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(recipe)) + '\n', 'UTF-8')
                         }
                     }
 
@@ -210,7 +231,7 @@ if (usesLegacyLoom) {
                     if (rodModel.isFile()) {
                         def model = new groovy.json.JsonSlurper().parse(rodModel)
                         model.overrides = [[predicate: [cast: 1], model: 'fishingfrenzy:item/deluxe_fishing_rod_cast']]
-                        rodModel.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(model)) + '\\n', 'UTF-8')
+                        rodModel.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(model)) + '\n', 'UTF-8')
                     }
                 }
 
@@ -238,11 +259,19 @@ if (usesLegacyLoom) {
 
     ['common', loader].each { sourceName ->
         tasks.register("prepare${sourceName.capitalize()}LegacySources", Sync) {
-            from rootProject.file("${sourceName}/src/main/java")
+            from(rootProject.file("${sourceName}/src/main/java")) {
+                if (is120 && sourceName == 'common') {
+                    exclude 'net/vg/fishingfrenzy/item/DeluxeFishingRodItem.java'
+                }
+            }
+            if (is120 && sourceName == 'common') {
+                from rootProject.file('gradle/compat/1.20.1/java')
+            }
             into layout.buildDirectory.dir("matrix-sources/${sourceName}")
             filteringCharset = 'UTF-8'
             doLast {
                 def legacyReplacements = [
+                        '.getOverworldClockTime()': '.getDayTime()',
                         'net.minecraft.resources.Identifier': 'net.minecraft.resources.ResourceLocation',
                         'Identifier.fromNamespaceAndPath': 'ResourceLocation.fromNamespaceAndPath',
                         'net.minecraft.advancements.criterion.MinMaxBounds': 'net.minecraft.advancements.critereon.MinMaxBounds',
@@ -255,6 +284,10 @@ if (usesLegacyLoom) {
                         'AbstractSchoolingFish': 'AbstractSchoolingFish'
                 ]
                 fileTree(destinationDir).matching { include '**/*.java' }.files.each { sourceFile ->
+                    // NBT storage is an isolated implementation, not component text rewriting.
+                    if (is120 && sourceFile.name == 'DeluxeFishingRodItem.java') {
+                        return
+                    }
                     def source = sourceFile.getText('UTF-8')
                     legacyReplacements.each { from, to -> source = source.replace(from, to) }
 
@@ -452,8 +485,8 @@ import net.vg.fishingfrenzy.item.fish.FishManager;'''
                         source = source.replaceAll(/for \(ItemStackTemplate template : bundleContentsComponent\.items\(\)\) \{\s*if \(template\.item\(\)\.value\(\) instanceof BaitItem\) \{\s*return template\.create\(\);/,
                                 'for (ItemStack itemStack : bundleContentsComponent.items()) {\n            if (itemStack.getItem() instanceof BaitItem) {\n                return itemStack.copy();')
                         source = source.replaceAll(/List<ItemStack> stacks = bundleContentsComponent\.itemCopyStream\(\)\.collect\(Collectors\.toList\(\)\);/,
-                                'List<ItemStack> stacks = new ArrayList<>(bundleContentsComponent.items());')
-                        source = source.replaceAll(/(?s)List<ItemStackTemplate> templates = stacks\.stream\(\)\s*\.map\(s -> new ItemStackTemplate\(s\.getItem\(\), s\.getCount\(\)\)\)\s*\.collect\(Collectors\.toList\(\)\);\s*rodStack\.set\(DataComponents\.BUNDLE_CONTENTS, new BundleContents\(templates\)\);/,
+                                'List<ItemStack> stacks = java.util.stream.StreamSupport.stream(bundleContentsComponent.items().spliterator(), false).map(ItemStack::copy).collect(Collectors.toList());')
+                        source = source.replaceAll(/(?s)List<ItemStackTemplate> templates = stacks\.stream\(\)\s*\.map\(ItemStackTemplate::fromNonEmptyStack\)\s*\.collect\(Collectors\.toList\(\)\);\s*rodStack\.set\(DataComponents\.BUNDLE_CONTENTS, new BundleContents\(templates\)\);/,
                                 'rodStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(stacks));')
                         source = source.replace('public boolean isBarVisible(ItemStack stack)', 'public boolean isBundleBarVisible(ItemStack stack)')
                         source = source.replace('public int getBarWidth(ItemStack stack)', 'public int getBundleBarWidth(ItemStack stack)')
@@ -608,7 +641,7 @@ public class FishingHookRendererMixin {
 // 26.2 moved a small number of vanilla advancement classes. Keep the canonical
 // source on the 26.1.2 names and generate the mechanically adjusted 26.2 view.
 // This avoids duplicate source trees while making each matrix target explicit.
-if (matrixValue('minecraft_version') == '26.2') {
+if (matrixValue('minecraft_version') in ['26.2', '26.3']) {
     def advancementPackageReplacements = [
             'net.minecraft.advancements.criterion.MinMaxBounds': 'net.minecraft.advancements.predicates.MinMaxBounds',
             'net.minecraft.advancements.CriteriaTriggers': 'net.minecraft.advancements.triggers.CriteriaTriggers',
@@ -620,6 +653,18 @@ if (matrixValue('minecraft_version') == '26.2') {
             '.add(fish.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(fish.get()).orElseThrow())',
             '.add(cookedfish.get())': '.add(BuiltInRegistries.ITEM.getResourceKey(cookedfish.get()).orElseThrow())'
     ]
+    if (matrixValue('minecraft_version') == '26.3') {
+        // Verified against the 26.3 methods; these are mechanical API changes.
+        advancementPackageReplacements.putAll([
+                'new BundleContents.Mutable(bundleContents)': 'bundleContents.asMutable()',
+                '.itemCopyStream()': '.itemCopies()',
+                'poseStack.mulPose(': 'poseStack.rotate(',
+                'fishRegistry.getGroupSizes().getFirst(),': 'net.minecraft.util.valueproviders.UniformInt.of(fishRegistry.getGroupSizes().getFirst(),',
+                'fishRegistry.getGroupSizes().getSecond()': 'fishRegistry.getGroupSizes().getSecond())',
+                'createRecipeProvider(HolderLookup.Provider registries, RecipeOutput output)': 'createRecipeProvider(HolderLookup.Provider registries, net.minecraft.data.worldgen.BootstrapContext<net.minecraft.world.item.crafting.Recipe<?>> recipes, net.minecraft.data.worldgen.BootstrapContext<net.minecraft.advancements.Advancement> advancements)',
+                'new RecipeProvider(registries, output)': 'new RecipeProvider(recipes, advancements)'
+        ])
+    }
     ['common', loader].each { sourceName ->
         tasks.register("prepare${sourceName.capitalize()}26_2Sources", Sync) {
             from rootProject.file("${sourceName}/src/main/java")
@@ -635,6 +680,28 @@ if (matrixValue('minecraft_version') == '26.2') {
         dependsOn tasks.named('prepareCommon26_2Sources')
         dependsOn tasks.named("prepare${loader.capitalize()}26_2Sources")
     }
+}
+
+if (matrixValue('minecraft_version') == '26.3') {
+    def prepared = tasks.register('prepareCommon26_3Resources', Sync) {
+        from rootProject.file('common/src/main/resources')
+        into layout.buildDirectory.dir('matrix-resources/common')
+        doLast {
+            // RecipeUnlockedTrigger now accepts a holder set named `recipes`.
+            fileTree(destinationDir).matching { include 'data/**/advancement/**/*.json' }.files.each { file ->
+                def advancement = new groovy.json.JsonSlurper().parse(file)
+                def changed = false
+                advancement.criteria?.each { key, criterion ->
+                    if (criterion.trigger == 'minecraft:recipe_unlocked' && criterion.conditions?.recipe instanceof String) {
+                        criterion.conditions.recipes = [criterion.conditions.remove('recipe')]
+                        changed = true
+                    }
+                }
+                if (changed) file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(advancement)) + '\n', 'UTF-8')
+            }
+        }
+    }
+    tasks.named('processResources') { dependsOn prepared }
 }
 
 dependencies {
@@ -653,6 +720,9 @@ dependencies {
         if (matrix.getProperty('mixinextras_version') != null) {
             implementation "io.github.llamalad7:mixinextras-fabric:${matrixValue('mixinextras_version')}"
         }
+    } else if (isForge) {
+        forge "net.minecraftforge:forge:${matrixValue('minecraft_version')}-${matrixValue('forge_version')}"
+        modImplementation "dev.architectury:architectury-forge:${matrixValue('architectury_api_version')}"
     } else {
         neoForge "net.neoforged:neoforge:${matrixValue('neoforge_version')}"
         implementation "dev.architectury:architectury-neoforge:${matrixValue('architectury_api_version')}"
@@ -694,6 +764,14 @@ processResources {
                     architectury_api_version: matrixValue('architectury_api_version'),
                     java_version: javaVersion
         }
+    } else if (isForge) {
+        inputs.property 'forge_version', matrixValue('forge_version')
+        filesMatching('META-INF/mods.toml') {
+            expand version: project.version,
+                    minecraft_version: matrixValue('minecraft_version'),
+                    forge_version: matrixValue('forge_version'),
+                    architectury_api_version: matrixValue('architectury_api_version')
+        }
     } else {
         inputs.property 'neoforge_version', matrixValue('neoforge_version')
         filesMatching('META-INF/neoforge.mods.toml') {
@@ -719,6 +797,16 @@ loom {
 
 tasks.named('jar') {
     destinationDirectory = rootProject.layout.buildDirectory.dir("libs/${project.name}")
+    if (isForge) {
+        manifest.attributes('MixinConfigs': 'fishingfrenzy.mixins.json')
+    }
+}
+
+if (is120) {
+    apply from: rootProject.file('gradle/compat/1.20.1.gradle')
+    if (providers.gradleProperty('gameplay_tests').isPresent()) {
+        apply from: rootProject.file('gradle/gameplay-tests.gradle')
+    }
 }
 
 if (usesLegacyLoom) {

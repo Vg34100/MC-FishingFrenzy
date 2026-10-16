@@ -37,12 +37,18 @@ def dependencies(metadata, loader, pins, config):
     else:
         blocks = re.findall(r'\[\[dependencies\.' + re.escape(config['mod_id']) + r'\]\](.*?)(?=\n\[|\Z)', metadata, re.DOTALL)
         if not blocks:
-            raise ValueError('Missing NeoForge dependency declarations for ' + config['mod_id'])
+            raise ValueError('Missing loader dependency declarations for ' + config['mod_id'])
         declared = {}
         for block in blocks:
             fields = dict(re.findall(r'^\s*(\w+)\s*=\s*"([^"\n]*)"', block, re.MULTILINE))
-            declared[fields["modId"]] = fields["type"]
-    for key in ("minecraft", "java", "fabricloader", "neoforge"):
+            if loader == 'forge':
+                mandatory = re.search(r'^\s*mandatory\s*=\s*(true|false)\s*$', block, re.MULTILINE)
+                if not mandatory:
+                    raise ValueError('Missing Forge dependency requirement: ' + fields['modId'])
+                declared[fields['modId']] = 'required' if mandatory[1] == 'true' else 'optional'
+            else:
+                declared[fields["modId"]] = fields["type"]
+    for key in ("minecraft", "java", "fabricloader", "neoforge", "forge"):
         declared.pop(key, None)
     result = []
     for mod_id, kind in sorted(declared.items()):
@@ -78,13 +84,13 @@ def publication_plan(root=ROOT):
     for matrix in sorted((root / "gradle/matrix").glob("*.properties")):
         target = WRAPPER["matrix_properties"](matrix)
         minecraft, loader = target["minecraft_version"], target["loader"]
-        if matrix.stem != f"{minecraft}-{loader}" or loader not in ("fabric", "neoforge"):
+        if matrix.stem != f"{minecraft}-{loader}" or loader not in ("fabric", "neoforge", "forge"):
             raise ValueError(f"Invalid publishing target: {matrix}")
         values = dict(mod_version=version, mod_name=config['mod_name'], minecraft_version=minecraft, loader=loader,
-                      loader_name={"fabric": "Fabric", "neoforge": "NeoForge"}[loader])
+                      loader_name={"fabric": "Fabric", "neoforge": "NeoForge", "forge": "Forge"}[loader])
         artifact = f"build/libs/{matrix.stem}/{pins['archives_name']}-{loader}-{minecraft}-{version}.jar"
         source = root / loader / "src/main/resources" / (
-            "fabric.mod.json" if loader == "fabric" else "META-INF/neoforge.mods.toml")
+            "fabric.mod.json" if loader == "fabric" else ("META-INF/mods.toml" if loader == 'forge' else "META-INF/neoforge.mods.toml"))
         metadata = source.read_text(encoding="utf-8")
         if loader == 'fabric':
             environment = json.loads(metadata).get('environment', '*')
@@ -93,9 +99,9 @@ def publication_plan(root=ROOT):
             environments = ['Client', 'Server'] if environment == '*' else [environment.title()]
         else:
             sides = re.findall(r'^\s*side\s*=\s*"([^\"]+)"', metadata, re.MULTILINE)
-            bootstrap = root / 'neoforge/src/main/java/net/vg/fishingfrenzy/neoforge/FishingFrenzyNeoForge.java'
+            bootstrap = root / loader / f'src/main/java/net/vg/fishingfrenzy/{loader}/FishingFrenzy{values["loader_name"]}.java'
             if not sides or set(sides) != {'BOTH'} or 'dist = Dist.CLIENT' in bootstrap.read_text():
-                raise ValueError('NeoForge Client + Server publication differs from loader metadata/bootstrap')
+                raise ValueError('Client + Server publication differs from loader metadata/bootstrap')
             environments = ['Client', 'Server']
         expected = ['Client', 'Server'] if config['environment'] == 'both' else [config['environment'].title()]
         if environments != expected:
@@ -136,11 +142,12 @@ def verified_plan(root=ROOT):
     config = properties(root / "gradle/publishing.properties")
     for row in data["entries"]:
         matrix = root / "gradle/matrix" / (row["target"] + ".properties")
-        artifact = verifier["inspect"](matrix)
+        artifact = verifier["inspect"](matrix, require_canonical=True)
         if artifact.resolve() != (root / row["artifact"]).resolve():
             raise ValueError(f"Unexpected verified artifact: {artifact}")
         with ZipFile(artifact) as jar:
-            meta = jar.read("fabric.mod.json" if row["loader"] == "fabric" else "META-INF/neoforge.mods.toml").decode()
+            name = "fabric.mod.json" if row["loader"] == "fabric" else ("META-INF/mods.toml" if row['loader'] == 'forge' else "META-INF/neoforge.mods.toml")
+            meta = jar.read(name).decode()
         actual = dependencies(meta, row["loader"], WRAPPER["matrix_properties"](matrix), config)
         if actual != row["dependencies"]:
             raise ValueError(f"Packaged dependency metadata differs from publication plan: {row['target']}")
@@ -252,7 +259,7 @@ def curseforge_matches(data, existing=None):
             names = [file.get('name', ''), file.get('display', '')]
             semantic = (any(has_mod_version(name, data['mod_version']) for name in names)
                         and row['minecraft'] in file.get('versions', [])
-                        and {'fabric': 'Fabric', 'neoforge': 'NeoForge'}[row['loader']] in file.get('versions', []))
+                        and {'fabric': 'Fabric', 'neoforge': 'NeoForge', 'forge': 'Forge'}[row['loader']] in file.get('versions', []))
             if semantic:
                 if not file.get('id'):
                     raise ValueError('Matching CurseForge file has no remote ID')
@@ -447,7 +454,7 @@ def run(project, command, args, print_plan, wrapper):
         for row in data['entries']:
             if row not in pending and row['target'] not in matches:
                 print(f'RESUME SKIP {platform} {row["target"]}: exact-artifact API receipt already recorded')
-    if real and platform == 'modrinth' and pending and data['canonical_artifacts_file']:
+    if real and platform == 'modrinth' and pending and CANONICAL['inventory'](project.root).get('origin', 'modrinth') == 'modrinth':
         raise ValueError('Canonical Modrinth releases are read-only; ZERO new Modrinth uploads permitted')
     if not pending:
         print(f'{platform.upper()} PUBLISH PASS ({len(data["entries"])}/{len(data["entries"])}, already acknowledged)')

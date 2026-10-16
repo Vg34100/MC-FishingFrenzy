@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "fishingfrenzy_gameplay_tests",
+  "version": "1",
+  "name": "Fishing Frenzy gameplay tests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": ["net.vg.fishingfrenzy.validation.FabricGameplayTests"]
+  },
+  "depends": {"fishingfrenzy": "*", "fabric-gametest-api-v1": "*"}
+}

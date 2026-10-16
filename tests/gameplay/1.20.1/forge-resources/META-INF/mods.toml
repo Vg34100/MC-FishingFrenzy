@@ -1,0 +1,13 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "CC0-1.0"
+[[mods]]
+modId = "fishingfrenzy_gameplay_tests"
+version = "1"
+displayName = "Fishing Frenzy gameplay tests"
+[[dependencies.fishingfrenzy_gameplay_tests]]
+modId = "fishingfrenzy"
+mandatory = true
+versionRange = "[1.2.2,)"
+ordering = "AFTER"
+side = "BOTH"

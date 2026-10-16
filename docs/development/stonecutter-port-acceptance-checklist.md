@@ -23,12 +23,14 @@ to build the matrix; this one defines when the work is actually complete.
 
 - [ ] Create one explicit `<mc-version>-fabric` and `<mc-version>-neoforge`
   node per supported pair, with pinned property files.
+  Use `<mc-version>-forge` for 1.20.1; register targets from the pin files.
 - [ ] Keep the main `common/`, `fabric/`, and `neoforge/` trees canonical for
   the maintained/current API generation.
 - [ ] Give each node an isolated run directory.
 - [ ] Select Java 21 for 1.21/1.21.1 and Java 25 for 26.x where those are the
   game's requirements. Configure legacy toolchains at project level before
   Loom creates run tasks; do not combine `javaLauncher` and `executable`.
+  Minecraft 1.20.1 requires Java 17 for compilation and game execution.
 - [ ] Write a narrow, named generated-source/resource transform only after
   proving a specific incompatibility. Never edit `build/matrix-*` output.
 
@@ -59,6 +61,7 @@ to build the matrix; this one defines when the work is actually complete.
 - [ ] Run `python build-smart.py matrix:package`.
 - [ ] For 1.21/1.21.1, distribute only the **remapped** `remapJar` output: the
   jar without `-dev` in its name. Never install the Mojang-named `*-dev.jar`.
+  The same rule applies to 1.20.1 Fabric/Forge.
 - [ ] For 26.1+, distribute the normal `jar` output; this game line is
   unobfuscated and does not use legacy remapping.
 - [ ] Confirm the generated release jar sits in

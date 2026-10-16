@@ -119,7 +119,7 @@ public class ModEntitySpawns {
         if (!fishRegistry.getYRange().matches(pos.getY())) {
             return "height";
         }
-        long timeOfDay = level.getLevelData().getGameTime();
+        long timeOfDay = level.getLevel().getOverworldClockTime();
         if (!isWithinTimeRange(timeOfDay, fishRegistry.getMinTime(), fishRegistry.getMaxTime())) {
             return "time";
         }
@@ -170,7 +170,7 @@ public class ModEntitySpawns {
     }
 
     private static boolean isWithinTimeRange(long currentTime, int minTime, int maxTime) {
-        currentTime = currentTime % 24000;
+        currentTime = Math.floorMod(currentTime, 24000);
         if (minTime <= maxTime) {
             return currentTime >= minTime && currentTime <= maxTime;
         } else {

@@ -109,7 +109,7 @@ public class CustomBreedableSchoolingFishEntity extends BreedableSchoolingFishEn
 
     @Override
     public boolean isBreedingItem(ItemStack stack) {
-        return stack.is(Items.SEAGRASS);
+        return stack.is(fishRegistry.getBreedingItem());
     }
 
     @Override

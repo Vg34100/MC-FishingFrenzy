@@ -70,8 +70,21 @@ public abstract class BreedableSchoolingFishEntity extends AbstractSchoolingFish
     }
 
     @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+        super.onSyncedDataUpdated(key);
+        if (DATA_BABY_ID.equals(key)) this.refreshDimensions();
+    }
+
+    @Override
     public void aiStep() {
         super.aiStep();
+
+        if (this.level().isClientSide()) return;
+        if (this.isAlive()) {
+            int age = this.getBreedingAge();
+            if (age < 0) this.setBreedingAge(age + 1);
+            else if (age > 0) this.setBreedingAge(age - 1);
+        }
 
         if (this.getBreedingAge() != 0) {
             this.loveTicks = 0;
@@ -99,8 +112,10 @@ public abstract class BreedableSchoolingFishEntity extends AbstractSchoolingFish
                 return InteractionResult.SUCCESS;
             }
             if (this.isBaby()) {
-                this.eat(player, interactionHand, itemStack);
-                this.growUp(toGrowUpAge(-this.getBreedingAge()), true);
+                if (!this.level().isClientSide()) {
+                    this.eat(player, interactionHand, itemStack);
+                    this.growUp(toGrowUpAge(-this.getBreedingAge()), true);
+                }
                 return InteractionResult.SUCCESS;
             }
             if (this.level().isClientSide()) {
@@ -132,12 +147,13 @@ public abstract class BreedableSchoolingFishEntity extends AbstractSchoolingFish
     }
     public void growUp(int age, boolean overGrow) {
         int i = this.getBreedingAge();
+        int previousAge = i;
         i += age * 20;
         if (i > 0) {
             i = 0;
         }
 
-        int k = i - i;
+        int k = i - previousAge;
         this.setBreedingAge(i);
         if (overGrow) {
             this.forcedAge += k;
@@ -174,7 +190,8 @@ public abstract class BreedableSchoolingFishEntity extends AbstractSchoolingFish
         if (other == this) {
             return  false;
         } else {
-            return other.getClass() == this.getClass() && this.isInLove() && other.isInLove();
+            return other.getType() == this.getType() && this.getBreedingAge() == 0
+                    && other.getBreedingAge() == 0 && this.isInLove() && other.isInLove();
         }
     }
 

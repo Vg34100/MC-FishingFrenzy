@@ -1,0 +1,58 @@
+// Opt-in 1.20.1 world tests. Neither their classes nor metadata enter the mod JAR.
+def pins = new Properties()
+rootProject.file("gradle/matrix/${project.name}.properties").withInputStream { pins.load(it) }
+def loader = pins.getProperty('loader')
+def testId = 'fishingfrenzy_gameplay_tests'
+def testSources = sourceSets.create('gameplayTest') {
+    java.srcDirs = [rootProject.file('tests/gameplay/1.20.1/common'), rootProject.file("tests/gameplay/1.20.1/${loader}")]
+    resources.srcDirs = [rootProject.file('tests/gameplay/1.20.1/resources'), rootProject.file("tests/gameplay/1.20.1/${loader}-resources")]
+    compileClasspath += sourceSets.main.output
+    runtimeClasspath += sourceSets.main.output
+}
+configurations.gameplayTestCompileClasspath.extendsFrom(configurations.compileClasspath)
+configurations.gameplayTestRuntimeClasspath.extendsFrom(configurations.runtimeClasspath)
+def fishModels = rootProject.file('common/src/main/java/net/vg/fishingfrenzy/registry/DynamicFishSystem.java')
+tasks.named('processGameplayTestResources') {
+    inputs.file fishModels
+    doLast {
+        // Fabric discovers tests before mod initialization; resolve registries in
+        // the test bodies, and discover case names from the canonical model list.
+        def names = (fishModels.getText('UTF-8') =~ /Map\.entry\("([a-z_]+)"/).collect { it[1] }.sort()
+        if (names.empty || names.toSet().size() != names.size()) throw new GradleException('Invalid gameplay test fish inventory')
+        new File(destinationDir, 'fishingfrenzy-gameplay-fish.txt').setText(names.join('\n') + '\n', 'UTF-8')
+    }
+}
+def testDir = rootProject.file(providers.gradleProperty('gameplay_test_dir').getOrElse("runs/${project.name}/gameplay-tests"))
+loom {
+    mods {
+        fishingfrenzy { sourceSet sourceSets.main }
+        fishingfrenzy_gameplay_tests { sourceSet testSources }
+    }
+    runs {
+        gameplayTest {
+            server()
+            source testSources
+            runDir = testDir
+            if (providers.gradleProperty('gameplay_bait_timers').isPresent()) {
+                vmArg '-Dfishingfrenzy.gameplay.baitTimersOnly=true'
+            }
+            if (providers.gradleProperty('gameplay_test_cases').isPresent()) {
+                vmArg "-Dfishingfrenzy.gameplay.cases=${providers.gradleProperty('gameplay_test_cases').get()}"
+            }
+            if (loader == 'fabric') {
+                vmArg '-Dfabric-api.gametest'
+                vmArg "-Dfabric-api.gametest.report-file=${new File(testDir, 'results.xml').absolutePath}"
+            } else {
+                vmArg '-Dforge.gameTestServer=true'
+                vmArg "-Dforge.enabledGameTestNamespaces=${testId}"
+            }
+        }
+    }
+}
+tasks.named('runGameplayTest') {
+    dependsOn tasks.named('gameplayTestClasses')
+    doFirst {
+        testDir.mkdirs()
+        new File(testDir, 'eula.txt').setText('eula=true\n', 'UTF-8')
+    }
+}

@@ -56,7 +56,7 @@ jobs:
         id: revision
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Retrieve and hash-verify the pinned public Modrinth JARs
-        run: python scripts/canonical-artifacts.py
+        run: python scripts/canonical-artifacts.py --public
       - name: Verify installable artifacts
         run: python scripts/verify-matrix-artifacts.py
       - name: Collect only verified release JARs and shared release notes

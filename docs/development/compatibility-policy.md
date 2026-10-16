@@ -107,3 +107,19 @@ Validation:
 ```
 
 Raw migration diaries do not belong here.
+
+## 1.20.1 / 26.3 boundaries
+
+See `minecraft-1.20.1-and-26.3-port.md` for acceptance evidence.
+
+- 26.3 keeps the modern no-remap pipeline. Bundle mutation, spawn count
+  providers, pose rotation, and recipe bootstrap contexts use narrow API substitutions.
+- 1.20.1 uses Java 17 and remapped distribution JARs. It extends the established
+  1.21 source view with small API deltas and parsed resource conversion.
+- NBT rod storage is a separate small item implementation under
+  `gradle/compat/1.20.1/java/`; the shared fish definitions and assets remain canonical.
+- Forge has native bootstrap/client code under `forge/`; its event bus,
+  dependency declarations and mixin manifest are independent of NeoForge.
+- Local structure checks do not require historical release hashes. Malformed
+  JSON exceptions still require exact pinned public 1.2.2 bytes; publication
+  always requires canonical artifact hashes.

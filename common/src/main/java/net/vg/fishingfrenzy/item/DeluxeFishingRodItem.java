@@ -163,13 +163,19 @@ public class DeluxeFishingRodItem extends FishingRodItem {
     }
 
     public void decrementBaitInBundle(ItemStack rodStack) {
+        decrementBaitInBundle(rodStack, findBaitInBundle(rodStack));
+    }
+
+    public void decrementBaitInBundle(ItemStack rodStack, ItemStack usedBait) {
+        if (usedBait.isEmpty()) return;
         BundleContents bundleContentsComponent = rodStack.getOrDefault(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
         List<ItemStack> stacks = bundleContentsComponent.itemCopyStream().collect(Collectors.toList());
         Random random = new Random();
 
         boolean modified = false;
         for (ItemStack itemStack : stacks) {
-            if (itemStack.getItem() instanceof BaitProperties baitProperties) {
+            if (itemStack.getItem() instanceof BaitProperties baitProperties
+                    && ItemStack.isSameItemSameComponents(itemStack, usedBait)) {
                 if (random.nextFloat() <= baitProperties.getUseChance()) {
                     itemStack.shrink(1);
                     modified = true;
@@ -184,7 +190,7 @@ public class DeluxeFishingRodItem extends FishingRodItem {
                 rodStack.set(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY);
             } else {
                 List<ItemStackTemplate> templates = stacks.stream()
-                        .map(s -> new ItemStackTemplate(s.getItem(), s.getCount()))
+                        .map(ItemStackTemplate::fromNonEmptyStack)
                         .collect(Collectors.toList());
                 rodStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(templates));
             }

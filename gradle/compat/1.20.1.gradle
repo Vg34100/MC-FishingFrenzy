@@ -1,0 +1,191 @@
+// Deltas from the established 1.21 compatibility view. No separate legacy project.
+def pins = new Properties()
+rootProject.file("gradle/matrix/${project.name}.properties").withInputStream { pins.load(it) }
+def loader = pins.getProperty('loader')
+
+['common', loader].each { sourceName ->
+    tasks.named("prepare${sourceName.capitalize()}LegacySources", Sync) {
+        doLast {
+            fileTree(destinationDir).matching { include '**/*.java' }.files.each { file ->
+                if (file.name == 'DeluxeFishingRodItem.java') return
+                def source = file.getText('UTF-8').replace('\r\n', '\n')
+                source = source.replace('ResourceLocation.fromNamespaceAndPath(', 'new ResourceLocation(')
+                source = source.replace('SpawnPlacementTypes.IN_WATER', 'SpawnPlacements.Type.IN_WATER')
+                source = source.replace('import net.minecraft.world.entity.SpawnPlacementTypes;', 'import net.minecraft.world.entity.SpawnPlacements;')
+                source = source.replace('Holder<MobEffect>', 'MobEffect')
+                source = source.replace('ResourceKey<LootTable>', 'net.minecraft.resources.ResourceLocation')
+                if (file.name == 'BaitManager.java') {
+                    source = source.replace('ResourceKey.create(\n            Registries.LOOT_TABLE, new ResourceLocation("fishingfrenzy", "gameplay/magnet_fishing"))',
+                            'new ResourceLocation("fishingfrenzy", "gameplay/magnet_fishing")')
+                }
+                if (file.name == 'DeluxeFishingHook.java') {
+                    source = source.replace('.reloadableRegistries().getLootTable(', '.getLootData().getLootTable(')
+                    // Modern hooks subtract ticks; 1.20.1 multiplies its
+                    // constructor's Lure levels by 100. Apply the tick reduction
+                    // once when vanilla starts a wait, retaining its bite logic.
+                    source = source.replace('    private final int luckBonus;',
+                            '    private final int luckBonus;\n    private final int fishingWaitReductionTicks;')
+                    source = source.replace('super(player, level, luckBonus, waitTimeReductionTicks);',
+                            'super(player, level, luckBonus, 0);')
+                    source = source.replace('        this.luckBonus = luckBonus;',
+                            '        this.luckBonus = luckBonus;\n        this.fishingWaitReductionTicks = Math.max(0, waitTimeReductionTicks);')
+                    source = source.replace('    private boolean removeIfInvalid(Player player)',
+                            '''    @Override
+    public void tick() {
+        FishingHookAccessor timers = (FishingHookAccessor) this;
+        int previousWait = timers.fishingfrenzy$getTimeUntilLured();
+        super.tick();
+        int currentWait = timers.fishingfrenzy$getTimeUntilLured();
+        if (!this.level().isClientSide() && previousWait <= 0 && currentWait > 0) {
+            timers.fishingfrenzy$setTimeUntilLured(currentWait - this.fishingWaitReductionTicks);
+        }
+    }
+
+    private boolean removeIfInvalid(Player player)''')
+                }
+                if (file.name == 'FishingHookAccessor.java') {
+                    source = source.replace('    @Accessor("nibble")',
+                            '''    @Accessor("timeUntilLured")
+    int fishingfrenzy$getTimeUntilLured();
+
+    @Accessor("timeUntilLured")
+    void fishingfrenzy$setTimeUntilLured(int ticks);
+
+    @Accessor("nibble")''')
+                }
+                if (file.name == 'FishingFrenzyFabricClient.java') {
+                    source = source.replace('ModClientEvents.registerClient();',
+                            'ModClientEvents.registerClient();\n        net.vg.fishingfrenzy.client.LegacyItemVisuals.register();')
+                }
+                if (file.name == 'ModItems.java') {
+                    source = source.replace('import net.minecraft.core.component.DataComponents;', '')
+                    source = source.replace('import net.minecraft.world.item.component.BundleContents;', '')
+                    source = source.replace('.component(DataComponents.BUNDLE_CONTENTS, BundleContents.EMPTY)', '')
+                }
+                if (file.name == 'FishRegistry.java') {
+                    source = source.replace('import net.minecraft.core.component.DataComponents;', '')
+                    source = source.replace('import net.minecraft.world.item.component.CustomData;', '')
+                    source = source.replace('.component(DataComponents.BUCKET_ENTITY_DATA, CustomData.EMPTY)', '')
+                    source = source.replace('.saturationModifier(', '.saturationMod(')
+                    if (loader == 'forge') {
+                        // Forge registers items before entity types. Its native supplier
+                        // constructors defer the lookup until both registries are ready.
+                        source = source.replace('new SpawnEggItem(fishEntityType.get(),',
+                                'new net.minecraftforge.common.ForgeSpawnEggItem(fishEntityType,')
+                        source = source.replace('fishEntityType.get(),\n                        Fluids.WATER,\n                        SoundEvents.BUCKET_EMPTY_FISH,',
+                                'fishEntityType,\n                        () -> Fluids.WATER,\n                        () -> SoundEvents.BUCKET_EMPTY_FISH,')
+                    }
+                }
+                if (file.name == 'BreedableSchoolingFishEntity.java') {
+                    source = source.replace('defineSynchedData(SynchedEntityData.Builder arg)', 'defineSynchedData()')
+                    source = source.replace('super.defineSynchedData(arg);', 'super.defineSynchedData();')
+                    source = source.replace('arg.define(DATA_BABY_ID, false);', 'this.entityData.define(DATA_BABY_ID, false);')
+                    source = source.replace('stack.consume(1, player);', 'if (!player.getAbilities().instabuild) stack.shrink(1);')
+                }
+                if (file.name == 'CustomBreedableSchoolingFishEntity.java') {
+                    source = source.replace('arg -> arg.is(fishRegistry.getBreedingItem())',
+                            'net.minecraft.world.item.crafting.Ingredient.of(fishRegistry.getBreedingItem())')
+                    // The shared fish have no flop sound. 1.20.1's AbstractFish
+                    // calls playSound directly, without the newer null-safe path.
+                    source = source.replace('    @Override\n    protected SoundEvent getFlopSound()',
+                            '''    @Override
+    public void playSound(SoundEvent sound, float volume, float pitch) {
+        if (sound != null) super.playSound(sound, volume, pitch);
+    }
+
+    @Override
+    protected SoundEvent getFlopSound()''')
+                }
+                if (file.name == 'FishingFrenzyDebugCommands.java') {
+                    source = source.replace('SpawnPlacements.isSpawnPositionOk(fish.getFishEntityTypeDirectly(), level, pos)',
+                            'net.minecraft.world.level.NaturalSpawner.isSpawnPositionOk(SpawnPlacements.getPlacementType(fish.getFishEntityTypeDirectly()), level, pos, fish.getFishEntityTypeDirectly())')
+                }
+                if (file.name == 'BaitItem.java') {
+                    source = source.replace('import net.minecraft.world.item.Item.TooltipContext;', '')
+                    source = source.replace('TooltipContext context', 'net.minecraft.world.level.Level context')
+                }
+                if (file.path.replace('\\', '/').contains('/entity/client/')) {
+                    source = source.replace('int packedOverlay, int color)', 'int packedOverlay, float red, float green, float blue, float alpha)')
+                    source = source.replace('packedLight, packedOverlay, color);', 'packedLight, packedOverlay, red, green, blue, alpha);')
+                }
+                if (file.name == 'DynamicFishSystem.java') {
+                    source = source.replace('float partialTick, float scale)', 'float partialTick)')
+                    source = source.replace('rotationYaw, partialTick, scale);', 'rotationYaw, partialTick);')
+                }
+                if (file.name == 'FishingHookRendererMixin.java') {
+                    source = source.replace('method = "getPlayerHandPos"',
+                            'method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"')
+                }
+                file.setText(source, 'UTF-8')
+            }
+        }
+    }
+}
+
+tasks.named('prepareCommonLegacyResources', Sync) {
+    doLast {
+        def root = destinationDir
+        // 1.20.1 recipes and item predicates use their pre-component shapes.
+        def rewrite
+        rewrite = { value ->
+            if (value instanceof List) return value.collect { rewrite(it) }
+            if (!(value instanceof Map)) return value
+            def result = value.collectEntries { key, entry -> [(key): rewrite(entry)] }
+            if (result.type == 'minecraft:loot_table' && result.value instanceof String) {
+                // 1.20.1's LootTableReference serializer reads `name`.
+                result.name = result.remove('value')
+            }
+            if (result.items instanceof String) {
+                if (result.items.startsWith('#')) {
+                    result.tag = result.remove('items').substring(1)
+                } else {
+                    result.items = [result.items]
+                }
+            }
+            if (result.condition == 'minecraft:location_check' && result.predicate?.biome instanceof String
+                    && result.predicate.biome.startsWith('#')) {
+                def id = result.predicate.biome.substring(1).split(':', 2)
+                def tagFile = new File(root, "data/${id[0]}/tags/worldgen/biome/${id[1]}.json")
+                if (!tagFile.isFile()) throw new GradleException("Missing 1.20.1 biome-tag source: ${tagFile}")
+                def biomes = new groovy.json.JsonSlurper().parse(tagFile).values
+                if (!biomes.every { it instanceof String && !it.startsWith('#') }) {
+                    throw new GradleException('The 1.20.1 biome-tag expansion requires explicit biome IDs')
+                }
+                return [condition: 'minecraft:any_of', terms: biomes.collect { biome ->
+                    result + [predicate: result.predicate + [biome: biome]]
+                }]
+            }
+            return result
+        }
+        fileTree(root).matching { include 'data/**/*.json' }.files.each { file ->
+            def json = rewrite(new groovy.json.JsonSlurper().parse(file))
+            if (file.path.replace('\\', '/').contains('/recipe/') && json.result instanceof Map) {
+                def id = json.result.remove('id')
+                if (id != null) {
+                    if (json.type in ['minecraft:smelting', 'minecraft:blasting', 'minecraft:smoking', 'minecraft:campfire_cooking']) {
+                        if (json.result.get('count', 1) != 1) throw new GradleException('Legacy cooking recipes require a single output')
+                        json.result = id
+                    } else {
+                        json.result.item = id
+                    }
+                }
+            }
+            file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n', 'UTF-8')
+        }
+        // Registry data directories were singularized after 1.20.1.
+        def renamed = [recipe: 'recipes', advancement: 'advancements', loot_table: 'loot_tables',
+                       'tags/item': 'tags/items', 'tags/block': 'tags/blocks', 'tags/entity_type': 'tags/entity_types']
+        new File(root, 'data').listFiles().findAll { it.isDirectory() }.each { namespace ->
+            renamed.each { before, after ->
+                def dir = new File(namespace, before)
+                if (dir.isDirectory()) {
+                    def destination = new File(namespace, after)
+                    destination.parentFile.mkdirs()
+                    if (!dir.renameTo(destination)) throw new GradleException("Could not migrate ${dir}")
+                }
+            }
+        }
+        new File(root, 'pack.mcmeta').setText(groovy.json.JsonOutput.toJson(
+                [pack: [pack_format: 15, description: 'Fishing Frenzy resources']]) + '\n', 'UTF-8')
+    }
+}

@@ -21,7 +21,7 @@ public class BreedableSchoolFishMateGoal extends Goal {
     private final double speedModifier;
 
     public BreedableSchoolFishMateGoal(BreedableSchoolingFishEntity fish, double speedModifier) {
-        this(fish, speedModifier, fish.getClass());
+        this(fish, speedModifier, BreedableSchoolingFishEntity.class);
     }
 
     public BreedableSchoolFishMateGoal(BreedableSchoolingFishEntity fish, double speedModifier, Class<? extends BreedableSchoolingFishEntity> entityClass) {
@@ -44,7 +44,8 @@ public class BreedableSchoolFishMateGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return this.mate != null && this.mate.isAlive() && this.mate.isInLove() && this.timer < 60;
+        return this.mate != null && this.mate.isAlive()
+                && this.fish.canBreedWith(this.mate) && this.timer < 60;
     }
 
     @Override

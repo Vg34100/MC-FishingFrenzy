@@ -40,13 +40,13 @@ public class DeluxeFishingHook extends FishingHook {
 
     public DeluxeFishingHook(EntityType<? extends FishingHook> type, Level level, int luckBonus, int waitTimeReductionTicks, ItemStack baitStack) {
         super(type, level);
-        this.baitStack = baitStack;
+        this.baitStack = baitStack.copyWithCount(1);
         this.luckBonus = luckBonus;
     }
 
     public DeluxeFishingHook(Player player, Level level, int luckBonus, int waitTimeReductionTicks, ItemStack baitStack) {
         super(player, level, luckBonus, waitTimeReductionTicks);
-        this.baitStack = baitStack;
+        this.baitStack = baitStack.copyWithCount(1);
         this.luckBonus = luckBonus;
     }
 
@@ -107,7 +107,6 @@ public class DeluxeFishingHook extends FishingHook {
                 double f = player.getZ() - this.getZ();
 
                 int catches = 1;
-                int caught = 0;
                 float multiCatchChance = 0.0f; // Default chance
                 Item targetedFish = null;
 
@@ -136,21 +135,15 @@ public class DeluxeFishingHook extends FishingHook {
                             spawnCaughtItem(spawnStack, player, d, e, f, index);
                         }));
 
-                        caught++;
                     }
                 }
 
                 // Experience
                 if (player.level() instanceof ServerLevel sl) sl.addFreshEntity(new ExperienceOrb(player.level(), player.getX(), player.getY() + 0.5, player.getZ() + 0.5, this.random.nextInt(6) + 1));
-                // Decrease bait stack in the bundle
-                if (!baitStack.isEmpty()) {
-                    DeluxeFishingRodItem fishingRod = (DeluxeFishingRodItem) usedItem.getItem();
-                    fishingRod.decrementBaitInBundle(usedItem);
-                }
-
-                if (itemStack.is(ItemTags.FISHES)) {
-                    player.awardStat(Stats.FISH_CAUGHT, caught);
-                }
+            }
+            // One bait per successful retrieval, independent of loot/multi-catch count.
+            if (!list.isEmpty() && !baitStack.isEmpty()) {
+                ((DeluxeFishingRodItem) usedItem.getItem()).decrementBaitInBundle(usedItem, baitStack);
             }
             i = 1;
         }
@@ -186,7 +179,10 @@ public class DeluxeFishingHook extends FishingHook {
         );
 
         net.minecraft.world.entity.Entity spawnEntity = convertFishingRealEntity(itemEntity, player);
-        if (this.level() instanceof ServerLevel sl) sl.addFreshEntity(spawnEntity);
+        if (this.level() instanceof ServerLevel sl && sl.addFreshEntity(spawnEntity)
+                && itemStack.is(ItemTags.FISHES)) {
+            player.awardStat(Stats.FISH_CAUGHT, itemStack.getCount());
+        }
 
         Constants.LOGGER.info("Spawned item " + (index + 1) + ": " + itemStack.getItem().getName(itemStack).getString() + " at " + spawnEntity.position());
     }

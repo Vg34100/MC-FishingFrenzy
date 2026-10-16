@@ -1,0 +1,37 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "CC0-1.0"
+
+[[mods]]
+modId = "fishingfrenzy"
+version = "${version}"
+displayName = "Fishing Frenzy"
+authors = "Vg34100"
+description = '''
+A fishing expansion mod adding a wide variety of new fish, baits, and fishing mechanics.
+'''
+logoFile = "assets/fishingfrenzy/icon.png"
+
+[[dependencies.fishingfrenzy]]
+modId = "forge"
+mandatory = true
+versionRange = "[${forge_version},)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.fishingfrenzy]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraft_version}]"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.fishingfrenzy]]
+modId = "architectury"
+mandatory = true
+versionRange = "[${architectury_api_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[features.fishingfrenzy]
+javaVersion = "[17,)"

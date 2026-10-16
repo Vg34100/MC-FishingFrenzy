@@ -5,7 +5,8 @@ def pins = new Properties()
 rootProject.file("gradle/matrix/${project.name}.properties").withInputStream { pins.load(it) }
 def production = new Properties()
 rootProject.file('gradle/publishing.properties').withInputStream { production.load(it) }
-def runtimePin = { String key -> production.getProperty("release_smoke.${project.name}.${key}", pins.getProperty(key)) }
+def runtimePin = { String key -> providers.gradleProperty('release_smoke_built').isPresent()
+        ? pins.getProperty(key) : production.getProperty("release_smoke.${project.name}.${key}", pins.getProperty(key)) }
 def loader = pins.getProperty('loader')
 def legacy = pins.getProperty('loom_generation', 'current') == 'legacy'
 def installable = rootProject.file("build/libs/${project.name}/${rootProject.archives_name}-${loader}-${pins.getProperty('minecraft_version')}-${rootProject.mod_version}.jar")

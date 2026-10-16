@@ -76,7 +76,7 @@ tasks.named('modrinth') {
     def previous = manifest.entries.takeWhile { it.target != project.name }
     if (previous) mustRunAfter(previous.collect { ":${it.target}:modrinth" })
     doFirst {
-        if (real && manifest.canonical_artifacts_file) {
+        if (real && new JsonSlurper().parse(rootProject.file(manifest.canonical_artifacts_file)).get('origin', 'modrinth') != 'build') {
             throw new GradleException('Pinned canonical Modrinth release is read-only; no new uploads permitted')
         }
         if (real && !providers.environmentVariable('MODRINTH_TOKEN').getOrElse('')) {
@@ -118,7 +118,7 @@ tasks.register('curseforge', curseForgeTask) {
     release.changelog = manifest.changelog
     release.changelogType = 'markdown'
     release.addGameVersion(row.minecraft)
-    release.addModLoader(row.loader == 'fabric' ? 'Fabric' : 'NeoForge')
+    release.addModLoader([fabric: 'Fabric', neoforge: 'NeoForge', forge: 'Forge'][row.loader])
     release.addJavaVersion("Java ${row.java}".toString())
     release.addEnvironment(*row.environments)
     row.dependencies.each { dependency ->
